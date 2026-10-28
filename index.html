@@ -1,0 +1,1420 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vườn Dâu Thông Minh</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+/* Bố cục: dải đỏ dâu ở đầu (logo + tab), nội dung dạng lưới thẻ, co về 1 cột trên điện thoại */
+:root{
+  --bg:#fff6f5; --surface:#ffffff; --surface-2:#fdecea; --ink:#2a1215; --muted:#7c5b60; --line:#f1d5d6;
+  --berry:#d7263d; --berry-deep:#a8172c; --berry-soft:#fde1e4; --leaf:#2f7a3d; --leaf-soft:#e3f1e2; --seed:#e9b63b;
+  --band:#c51f36; --on-band:#ffffff;
+  --good:#2b8a49; --warn:#b5740a; --bad:#c0283a; --info:#2f6fa8;
+  --f-ui:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-data:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  --r:14px; color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#170c0e; --surface:#221316; --surface-2:#2e1a1e; --ink:#f7e8e9; --muted:#bc9fa3; --line:#3d2428;
+  --berry:#ff5d71; --berry-deep:#ff8d9b; --berry-soft:#45202a; --leaf:#7dca8b; --leaf-soft:#1e3324; --seed:#f3c55c;
+  --band:#4b1620; --on-band:#ffffff; --good:#6fd08a; --warn:#e9b14b; --bad:#ff7d8c; --info:#87bdf0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#170c0e; --surface:#221316; --surface-2:#2e1a1e; --ink:#f7e8e9; --muted:#bc9fa3; --line:#3d2428;
+  --berry:#ff5d71; --berry-deep:#ff8d9b; --berry-soft:#45202a; --leaf:#7dca8b; --leaf-soft:#1e3324; --seed:#f3c55c;
+  --band:#4b1620; --on-band:#ffffff; --good:#6fd08a; --warn:#e9b14b; --bad:#ff7d8c; --info:#87bdf0; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-ui)}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+/* dải đầu trang */
+header.top{background:var(--band);color:var(--on-band);position:sticky;top:0;z-index:5;
+  background-image:radial-gradient(circle at 12px 12px,rgba(255,236,170,.22) 1.6px,transparent 2px);background-size:26px 26px}
+.top .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-block:12px 4px}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand svg{flex:none}
+.brand h1{font-size:19px;margin:0;font-weight:800;letter-spacing:-.01em}
+.brand small{display:block;opacity:.85;font-size:12px;font-weight:500}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.16);color:var(--on-band);white-space:nowrap}
+.pill .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.6)}
+.pill.ok .dot{background:#8ff0a6}.pill.bad .dot{background:#ffc2c9}.pill.warn .dot{background:#ffe08a}.pill.sim .dot{background:#bfe0ff}
+nav.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav.tabs button{font:600 14px var(--f-ui);background:none;border:0;color:rgba(255,255,255,.78);padding:10px 13px;border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap}
+nav.tabs button:hover{color:#fff}
+nav.tabs button[aria-selected="true"]{color:#fff;border-bottom-color:var(--seed)}
+button:focus-visible,input:focus-visible,select:focus-visible,video:focus-visible{outline:2px solid var(--berry);outline-offset:2px}
+nav.tabs button:focus-visible{outline-color:#fff}
+main{padding-block:22px 48px}
+section.view{display:grid;gap:18px}
+h2{font-size:21px;margin:0;text-wrap:balance}
+h3{font-size:15px;margin:0 0 10px;font-weight:700}
+p.lead{margin:2px 0 0;color:var(--muted);max-width:70ch}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;min-width:0}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+@media (max-width:900px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:460px){.grid4{grid-template-columns:1fr}}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+.grid2.wide{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}
+@media (max-width:860px){.grid2,.grid2.wide{grid-template-columns:1fr}}
+.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bar .spacer{margin-left:auto}
+.updated{font-size:12.5px;color:var(--muted)}
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:10px;align-items:center;background:linear-gradient(135deg,var(--berry-soft),var(--surface) 70%);border:1px solid var(--line);border-radius:18px;padding:22px 22px 0;overflow:hidden}
+.hero h2{font-size:26px;font-weight:800;letter-spacing:-.02em}
+.hero .lead{margin-top:6px}
+.hero .plants{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 22px}
+.hero svg.art{align-self:end;width:100%;height:auto;max-width:300px;justify-self:end}
+@media (max-width:700px){.hero{grid-template-columns:1fr}.hero svg.art{justify-self:center;max-width:240px}}
+.pchip{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 12px 5px 5px;font-size:13px;cursor:pointer;color:var(--ink);font-family:var(--f-ui)}
+.pchip b{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--berry);color:#fff;font-size:13px}
+.pchip span{color:var(--muted)}
+/* cảm biến */
+.sensor{display:grid;gap:6px}
+.sensor .lbl{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;font-weight:600}
+.sensor .lbl svg{color:var(--berry)}
+.sensor .val{font:600 34px/1.1 var(--f-data);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.sensor .val small{font-size:15px;color:var(--muted);font-weight:400;margin-left:3px}
+.chip{justify-self:start;display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--surface-2);color:var(--muted)}
+.chip.good{background:var(--leaf-soft);color:var(--good)}
+.chip.warn{background:var(--surface-2);color:var(--warn)}
+.chip.bad{background:var(--berry-soft);color:var(--bad)}
+.sensor .ref{font-size:12px;color:var(--muted)}
+.seg{display:inline-flex;background:var(--surface-2);border-radius:9px;padding:3px;flex-wrap:wrap}
+.seg button{font:600 13px var(--f-ui);border:0;background:none;color:var(--muted);padding:6px 11px;border-radius:7px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--berry);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.chartbox{position:relative;height:300px;margin-top:12px}
+.chartbox .empty{position:absolute;inset:0}
+.empty{display:grid;place-items:center;text-align:center;color:var(--muted);padding:20px}
+.btn{font:600 14px var(--f-ui);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 14px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;justify-content:center}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--berry);border-color:var(--berry);color:#fff}
+.btn.primary:hover{background:var(--berry-deep);border-color:var(--berry-deep)}
+.btn.leaf{background:var(--leaf);border-color:var(--leaf);color:var(--surface)}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn.big{padding:12px 18px;font-size:15px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+/* thiết bị */
+.devs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:900px){.devs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:420px){.devs{grid-template-columns:1fr}}
+.dev{display:grid;gap:12px}
+.dev .head{display:flex;align-items:center;gap:10px}
+.dev .ico{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:var(--surface-2);color:var(--muted);flex:none}
+.dev.on .ico{background:var(--berry-soft);color:var(--berry)}
+.dev .name{font-weight:700}
+.dev .st{font-size:12.5px;color:var(--muted)}
+.dev.on .st{color:var(--good)}
+.dev .st.pending{color:var(--warn)}
+.switch{position:relative;width:52px;height:30px;border-radius:999px;border:0;background:var(--line);cursor:pointer;flex:none;margin-left:auto;transition:background .2s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
+.switch[aria-checked="true"]{background:var(--berry)}
+.switch[aria-checked="true"]::after{transform:translateX(22px)}
+.dev .topic{font:12px var(--f-data);color:var(--muted);overflow-wrap:anywhere}
+/* form */
+label.f{display:grid;gap:5px;font-size:13px;font-weight:600;color:var(--muted)}
+input[type=text],input[type=password],input[type=number],input[type=time],input[type=date],select{font:500 14px var(--f-ui);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:8px 10px;width:100%;min-width:0}
+.formrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;align-items:end}
+.days{display:flex;gap:5px;flex-wrap:wrap}
+.days label{display:inline-flex}
+.days input{position:absolute;opacity:0;pointer-events:none}
+.days span{font:600 12.5px var(--f-ui);padding:6px 9px;border-radius:8px;border:1px solid var(--line);color:var(--muted);cursor:pointer;min-width:38px;text-align:center}
+.days input:checked+span{background:var(--berry);border-color:var(--berry);color:#fff}
+.days input:focus-visible+span{outline:2px solid var(--berry);outline-offset:2px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+td.mono,code{font-family:var(--f-data);font-size:13px}
+code{background:var(--surface-2);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
+.tablewrap{overflow-x:auto}
+.dir{font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap}
+.dir.up{background:var(--leaf-soft);color:var(--good)}
+.dir.down{background:var(--berry-soft);color:var(--berry)}
+.note{font-size:13px;color:var(--muted);margin:10px 0 0;max-width:75ch}
+.log{font:12px/1.55 var(--f-data);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px;height:220px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.log .t{color:var(--muted)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;margin:0}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;overflow-wrap:anywhere}
+.kv dd.mono{font-family:var(--f-data);font-size:13px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;z-index:30;max-width:90vw}
+/* cây trồng */
+.plants-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:820px){.plants-grid{grid-template-columns:1fr}}
+.plant{display:grid;gap:14px}
+.plant .ph{display:flex;align-items:center;gap:12px}
+.badge{width:46px;height:50px;flex:none;display:grid;place-items:center;font:800 20px var(--f-ui);color:#fff;
+  background:var(--berry);clip-path:path("M23 50C9 42 0 31 0 19 0 9 7 4 13 4c4 0 8 2 10 5 2-3 6-5 10-5 6 0 13 5 13 15 0 12-9 23-23 31z");padding-top:6px}
+.badge.lg{transform:scale(1.15)}
+.plant .ttl{font-weight:800;font-size:17px}
+.plant .sub{font-size:13px;color:var(--muted)}
+.stage-now{display:grid;gap:4px;background:var(--surface-2);border-radius:11px;padding:12px}
+.stage-now .k{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.stage-now .v{font-weight:800;font-size:16px;color:var(--berry)}
+.stage-now p{margin:0;font-size:13.5px}
+.timeline{position:relative;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;margin-top:4px}
+.timeline .seg-t{height:8px;border-radius:4px;background:var(--line)}
+.timeline .seg-t.done{background:var(--leaf)}
+.timeline .seg-t.cur{background:var(--berry)}
+.tl-labels{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;font-size:10.5px;color:var(--muted);line-height:1.25;margin-top:4px}
+.watch{display:flex;gap:6px;flex-wrap:wrap}
+.thumbs{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.thumbs figure{margin:0;flex:none;width:76px;font-size:11px;color:var(--muted);text-align:center}
+.thumbs img{width:76px;height:76px;object-fit:cover;border-radius:9px;display:block;border:1px solid var(--line)}
+.sample{font-size:12.5px;background:var(--surface-2);color:var(--warn);border-radius:9px;padding:8px 12px}
+/* nhận diện */
+.cam{position:relative;background:#140a0c;border-radius:14px;overflow:hidden;aspect-ratio:4/3;max-width:100%;display:grid;place-items:center}
+.cam video,.cam img{width:100%;height:100%;object-fit:cover;display:block}
+.cam .ph-msg{color:#f3d9dc;text-align:center;padding:20px;display:grid;gap:10px;justify-items:center;font-size:14px}
+.cam .frame{position:absolute;inset:12%;border:2px dashed rgba(255,255,255,.55);border-radius:16px;pointer-events:none}
+.cam .tag{position:absolute;left:10px;top:10px;background:var(--berry);color:#fff;font-weight:700;font-size:13px;padding:4px 10px;border-radius:999px}
+.cam .qr{position:absolute;right:10px;top:10px;background:rgba(0,0,0,.55);color:#fff;font-size:12px;padding:4px 9px;border-radius:999px}
+.pick{display:flex;gap:8px;flex-wrap:wrap}
+.pick button{font:700 14px var(--f-ui);border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 14px;cursor:pointer}
+.pick button[aria-pressed="true"]{background:var(--berry);border-color:var(--berry);color:#fff}
+.pbar{display:grid;grid-template-columns:minmax(0,1fr) 52px;gap:4px 10px;align-items:center;font-size:13.5px}
+.pbar .track{grid-column:1/-1;height:7px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.pbar .fill{height:100%;background:var(--berry);border-radius:4px}
+.pbar .num{text-align:right;font-family:var(--f-data);font-size:12.5px}
+.result-head{display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;background:var(--surface-2)}
+.result-head.good{background:var(--leaf-soft)}.result-head.bad{background:var(--berry-soft)}
+.result-head .big{font-weight:800;font-size:18px}
+.result-head.good .big{color:var(--good)}.result-head.bad .big{color:var(--bad)}.result-head.warn .big{color:var(--warn)}
+.colors{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--surface-2)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.advice{border-left:3px solid var(--berry);padding:2px 0 2px 12px;font-size:14px}
+.advice p{margin:0 0 6px}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (max-width:460px){.stats{grid-template-columns:1fr}}
+.stat{background:var(--surface-2);border-radius:11px;padding:12px;display:grid;gap:4px;min-width:0}
+.stat .k{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.stat .v{font:700 22px/1.2 var(--f-data);font-variant-numeric:tabular-nums}
+.stat .v small{font:500 13px var(--f-ui);color:var(--muted)}
+.stat .s{font-size:12.5px;color:var(--muted)}
+.spec{display:flex;height:12px;border-radius:6px;overflow:hidden;margin-top:4px}
+.spec span:nth-child(1){background:#e2263c}.spec span:nth-child(2){background:#3a62d6}.spec span:nth-child(3){background:#e9e3d8}
+tr.cur td{background:var(--berry-soft)}
+.msg{font-size:13.5px;padding:8px 12px;border-radius:9px;background:var(--surface-2);margin-top:6px}
+.msg.good{background:var(--leaf-soft);color:var(--good)}.msg.bad{background:var(--berry-soft);color:var(--bad)}.msg.warn{color:var(--warn)}
+ul.tips{margin:0;padding-left:18px;display:grid;gap:6px;font-size:14px;max-width:80ch}
+#printTags{display:none}
+@media print{
+  body *{visibility:hidden}
+  #printTags,#printTags *{visibility:visible}
+  #printTags{display:grid!important;position:absolute;left:0;top:0;width:100%;grid-template-columns:1fr 1fr;gap:12mm;padding:10mm}
+  .qtag{border:1.5px dashed #999;border-radius:6mm;padding:6mm;text-align:center;font-family:var(--f-ui);color:#000}
+  .qtag svg{width:45mm;height:45mm}
+  .qtag b{display:block;font-size:20pt;color:#c51f36}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="row">
+      <div class="brand">
+        <svg width="36" height="36" viewBox="0 0 34 34" aria-hidden="true">
+          <circle cx="17" cy="17" r="17" fill="#fff"/>
+          <path d="M17 30c-5.5-2.8-9-8-9-13.5 0-3.4 2.6-5.3 5.3-5.3 1.7 0 2.8.8 3.7 1.8.9-1 2-1.8 3.7-1.8 2.7 0 5.3 1.9 5.3 5.3 0 5.5-3.5 10.7-9 13.5z" fill="#d7263d"/>
+          <path d="M11.5 11c2-1.2 3.8-.4 5.5 1.6 1.7-2 3.5-2.8 5.5-1.6-.9-1.8-2.6-2.7-4-2.8L17 5.5l-1.5 2.7c-1.4.1-3.1 1-4 2.8z" fill="#2f7a3d"/>
+          <g fill="#ffe7a3"><circle cx="13.5" cy="16.5" r=".9"/><circle cx="17" cy="15" r=".9"/><circle cx="20.5" cy="16.5" r=".9"/><circle cx="15" cy="20.5" r=".9"/><circle cx="19" cy="20.5" r=".9"/><circle cx="17" cy="24.5" r=".9"/></g>
+        </svg>
+        <div><h1>Vườn Dâu Thông Minh</h1><small id="gardenId">Mã vườn: —</small></div>
+      </div>
+      <span class="pill" id="pillBroker"><span class="dot"></span><span>Đang kết nối…</span></span>
+      <span class="pill" id="pillDevice"><span class="dot"></span><span>Yolo UNO: chưa thấy</span></span>
+      <span class="pill" id="pillDb"><span class="dot"></span><span>CSDL: chưa nối</span></span>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-view="tongquan" aria-selected="true">Tổng quan</button>
+      <button role="tab" data-view="caytrong" aria-selected="false">Cây trồng</button>
+      <button role="tab" data-view="chamsoc" aria-selected="false">Chăm sóc tự động</button>
+      <button role="tab" data-view="nhandien" aria-selected="false">Chụp & nhận diện</button>
+      <button role="tab" data-view="dieukhien" aria-selected="false">Điều khiển</button>
+      <button role="tab" data-view="lichtrinh" aria-selected="false">Lịch trình</button>
+      <button role="tab" data-view="ketnoi" aria-selected="false">Kết nối MQTT</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- TỔNG QUAN -->
+<section class="view" id="v-tongquan">
+  <div class="hero">
+    <div>
+      <h2>Vườn dâu tây hôm nay</h2>
+      <p class="lead updated" id="lastSeen">Chưa nhận dữ liệu từ Yolo UNO.</p>
+      <div class="plants" id="heroPlants"></div>
+      <div class="bar" style="margin-bottom:22px">
+        <button class="btn primary" data-go="nhandien">Chụp ảnh kiểm tra cây</button>
+        <button class="btn" id="btnSim">Chạy dữ liệu mô phỏng</button>
+      </div>
+    </div>
+    <svg class="art" viewBox="0 0 300 230" role="img" aria-label="Hình minh hoạ cây dâu tây có hoa và quả">
+      <defs>
+        <radialGradient id="gBerry" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#ff5a6e"/><stop offset="1" stop-color="#b3142a"/></radialGradient>
+        <linearGradient id="gLeaf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4f9d5a"/><stop offset="1" stop-color="#25643a"/></linearGradient>
+        <g id="leaflet"><path d="M0 0C-14-8-18-30-6-42 0-48 8-48 13-42 24-30 16-8 0 0z" fill="url(#gLeaf)"/><path d="M0-2C2-16 4-28 3-40" stroke="#bfe3c4" stroke-width="1.4" fill="none" opacity=".7"/></g>
+        <g id="berry"><path d="M0 0C-15 0-20 10-19 20-17 33-8 44 0 50 8 44 17 33 19 20 20 10 15 0 0 0z" fill="url(#gBerry)"/>
+          <g fill="#ffe08a"><circle cx="-9" cy="12" r="1.3"/><circle cx="0" cy="9" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="-11" cy="23" r="1.3"/><circle cx="-2" cy="20" r="1.3"/><circle cx="7" cy="22" r="1.3"/><circle cx="12" cy="30" r="1.3"/><circle cx="-6" cy="31" r="1.3"/><circle cx="3" cy="33" r="1.3"/><circle cx="-1" cy="42" r="1.3"/></g>
+          <path d="M-12 2C-6-4 0-3 0 1 0-3 6-4 12 2 6 4 2 6 0 3-2 6-6 4-12 2z" fill="#2f7a3d"/></g>
+        <g id="flower"><g fill="#fff" stroke="#e9b9bf" stroke-width="1"><circle cx="0" cy="-7" r="6"/><circle cx="6.7" cy="-2.2" r="6"/><circle cx="4.1" cy="5.7" r="6"/><circle cx="-4.1" cy="5.7" r="6"/><circle cx="-6.7" cy="-2.2" r="6"/></g><circle r="4" fill="#f2c14e"/></g>
+      </defs>
+      <ellipse cx="150" cy="222" rx="130" ry="10" fill="#7a4a2e" opacity=".25"/>
+      <path d="M60 228h180l-14-38H74z" fill="#9b5a36"/><path d="M66 196h168" stroke="#b8714a" stroke-width="6"/>
+      <g stroke="#3d7c45" stroke-width="3" fill="none" stroke-linecap="round">
+        <path d="M150 192C146 150 120 120 96 96"/><path d="M150 192C152 140 160 100 168 70"/><path d="M150 192C160 150 200 128 222 110"/>
+        <path d="M150 192C130 170 92 168 70 178"/><path d="M150 192C172 172 214 172 236 184"/><path d="M150 192C150 165 140 150 128 140"/>
+      </g>
+      <g transform="translate(96 96)"><use href="#leaflet" transform="rotate(-50)"/><use href="#leaflet" transform="rotate(-10)"/><use href="#leaflet" transform="rotate(-90)"/></g>
+      <g transform="translate(168 70)"><use href="#leaflet" transform="rotate(-25)"/><use href="#leaflet" transform="rotate(20)"/><use href="#leaflet" transform="rotate(-65)"/></g>
+      <g transform="translate(222 110)"><use href="#leaflet" transform="rotate(20)"/><use href="#leaflet" transform="rotate(60)"/><use href="#leaflet" transform="rotate(-15)"/></g>
+      <use href="#flower" x="128" y="138"/>
+      <use href="#flower" x="186" y="150"/>
+      <use href="#berry" x="70" y="172"/>
+      <use href="#berry" x="236" y="178" transform="rotate(-8 236 178)"/>
+      <g transform="translate(112 168) scale(.6)"><path d="M0 0C-15 0-20 10-19 20-17 33-8 44 0 50 8 44 17 33 19 20 20 10 15 0 0 0z" fill="#b5d98a"/><path d="M-12 2C-6-4 0-3 0 1 0-3 6-4 12 2 6 4 2 6 0 3-2 6-6 4-12 2z" fill="#2f7a3d"/></g>
+    </svg>
+  </div>
+  <div class="grid4" id="sensorCards"></div>
+  <div class="panel">
+    <div class="bar">
+      <h3 style="margin:0">Diễn biến theo thời gian</h3>
+      <div class="spacer"></div>
+      <div class="seg" id="segMetric"></div>
+      <div class="seg" id="segRange">
+        <button data-range="3600000" aria-pressed="true">1 giờ</button>
+        <button data-range="86400000" aria-pressed="false">24 giờ</button>
+        <button data-range="604800000" aria-pressed="false">7 ngày</button>
+      </div>
+    </div>
+    <div class="chartbox"><canvas id="chart"></canvas><div class="empty" id="chartEmpty"><div>Biểu đồ sẽ hiện khi Yolo UNO gửi số liệu lên.<br>Bấm “Chạy dữ liệu mô phỏng” để xem thử.</div></div></div>
+    <div class="bar" style="margin-top:12px">
+      <span class="updated" id="histCount"></span>
+      <div class="spacer"></div>
+      <button class="btn small" id="btnCsv">Tải số liệu (CSV)</button>
+      <button class="btn small" id="btnClear">Xoá lịch sử</button>
+    </div>
+  </div>
+</section>
+
+<!-- CÂY TRỒNG -->
+<section class="view" id="v-caytrong" hidden>
+  <div class="bar">
+    <div><h2>Hồ sơ 4 cây dâu</h2><p class="lead">Mỗi cây có một mã số. Sửa ngày trồng đúng thực tế để hệ thống tính giai đoạn hiện tại, giai đoạn sắp tới và các bệnh cần chú ý.</p></div>
+    <div class="spacer"></div>
+    <button class="btn" id="btnTags">In tem QR mã cây</button>
+  </div>
+  <div class="sample" id="sampleNote">Ngày trồng đang là ví dụ. Hãy sửa lại theo ngày trồng thật của từng cây.</div>
+  <div class="plants-grid" id="plantCards"></div>
+  <p class="note">Mốc giai đoạn tính từ ngày trồng cây con, áp dụng cho giống dâu tây ra quả quanh năm ở vùng khí hậu mát. Thời gian thực tế có thể lệch theo giống, nhiệt độ và chế độ chăm sóc, nên dùng để tham khảo và đối chiếu với ảnh chụp.</p>
+</section>
+
+<!-- CHĂM SÓC TỰ ĐỘNG -->
+<section class="view" id="v-chamsoc" hidden>
+  <div><h2>Chăm sóc tự động theo giai đoạn</h2><p class="lead">Webapp chọn công thức ánh sáng, dinh dưỡng và độ ẩm xơ dừa theo giai đoạn của cây, tự tạo lịch rồi gửi xuống Yolo UNO. Khi cây chuyển giai đoạn, công thức tự đổi theo.</p></div>
+  <div class="grid2 wide">
+    <div class="panel" id="careNow"></div>
+    <div class="panel" style="display:grid;gap:12px;align-content:start">
+      <h3 style="margin:0">Cài đặt</h3>
+      <label class="f">Áp dụng theo<select id="careTheo"><option value="auto">Giai đoạn của đa số cây</option><option value="1">Cây số 1</option><option value="2">Cây số 2</option><option value="3">Cây số 3</option><option value="4">Cây số 4</option></select></label>
+      <label class="f">Loại giống<select id="careGiong"><option value="ql">Ra quả quanh năm (bốn mùa)</option><option value="nn">Giống ngày ngắn (ra hoa khi ngày dưới 13 giờ)</option></select></label>
+      <label class="f">Nơi trồng<select id="careNoi"><option value="nang">Có nắng tự nhiên, đèn bù thêm</option><option value="trongnha">Trong nhà, chỉ dùng đèn</option></select></label>
+      <div class="formrow">
+        <label class="f">Mặt trời mọc<input type="time" id="careMoc"></label>
+        <label class="f">Mặt trời lặn<input type="time" id="careLan"></label>
+      </div>
+      <div class="formrow">
+        <label class="f">Bơm nước (ml/giây)<input type="number" id="careFlowNuoc" min="0.5" step="0.5"></label>
+        <label class="f">Bơm dinh dưỡng (ml/giây)<input type="number" id="careFlowDd" min="0.5" step="0.5"></label>
+        <label class="f">Bơm tưới (ml/giây)<input type="number" id="careFlowTuoi" min="0.5" step="0.5"></label>
+      </div>
+      <p class="note" style="margin:0">Đo lưu lượng: cho từng bơm chạy 10 giây vào cốc đo, lấy số ml chia 10.</p>
+      <div class="formrow">
+        <label class="f">EC bình dinh dưỡng (mS/cm)<input type="number" id="careEcDd" min="0.5" step="0.1"></label>
+        <label class="f">EC nước sạch (mS/cm)<input type="number" id="careEcNuoc" min="0" step="0.1"></label>
+      </div>
+      <p class="note" style="margin:0">Bình dinh dưỡng nên pha đậm khoảng gấp 8–10 lần nồng độ tưới (EC khoảng 10–15), đo bằng bút EC rồi nhập vào đây. Webapp tính tỉ lệ bơm để dung dịch trong bình pha đạt đúng EC của giai đoạn.</p>
+      <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="careAuto"> Tự áp dụng công thức mới khi cây chuyển giai đoạn</label>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>Công thức chăm sóc 6 giai đoạn</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Giai đoạn</th><th>Chiếu sáng</th><th>Màu đèn đỏ / xanh / trắng</th><th>EC dinh dưỡng</th><th>Tưới dinh dưỡng</th><th>Ẩm xơ dừa</th><th>Đạm : Kali</th></tr></thead>
+      <tbody id="recipeBody"></tbody>
+    </table></div>
+    <p class="note">Giờ chiếu sáng là tổng thời gian có sáng mỗi ngày (nắng + đèn). pH dung dịch giữ 5,8–6,2 ở mọi giai đoạn. Số liệu tổng hợp từ các nghiên cứu về dâu tây trồng giá thể và trong nhà, cần đối chiếu với cây thật và điều chỉnh.</p>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <h3>Kiểm tra dinh dưỡng xơ dừa</h3>
+      <p class="note" style="margin-top:0">Mỗi tuần 1–2 lần: đo EC, pH của dung dịch tưới và của nước thoát ra dưới chậu sau một lần tưới.</p>
+      <div class="formrow" style="margin-top:10px">
+        <label class="f">EC dung dịch tưới (mS/cm)<input type="number" id="ecIn" step="0.1" min="0"></label>
+        <label class="f">EC nước thoát (mS/cm)<input type="number" id="ecOut" step="0.1" min="0"></label>
+        <label class="f">pH dung dịch tưới<input type="number" id="phIn" step="0.1" min="0" max="14"></label>
+        <label class="f">ml tưới / ml thoát<span style="display:flex;gap:6px"><input type="number" id="mlIn" min="0" placeholder="tưới"><input type="number" id="mlOut" min="0" placeholder="thoát"></span></label>
+      </div>
+      <div class="bar" style="margin-top:12px"><button class="btn primary" id="btnEc">Ghi và đánh giá</button></div>
+      <div id="ecResult"></div>
+    </div>
+    <div class="panel">
+      <h3>Lần đo gần đây</h3>
+      <div class="tablewrap"><table><thead><tr><th>Ngày</th><th>EC vào</th><th>EC thoát</th><th>pH</th><th>% thoát</th></tr></thead><tbody id="ecBody"></tbody></table></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>Lưu ý khi trồng dâu bằng xơ dừa</h3>
+    <ul class="tips">
+      <li>Xơ dừa thô chứa nhiều natri và kali, lại giữ chặt canxi, magie. Trước khi trồng cần xả nước cho đến khi nước rỉ ra có EC dưới 1 mS/cm, sau đó ngâm “xử lý đệm” bằng dung dịch canxi nitrat (hoặc Cal-Mag) khoảng 8 giờ, làm 2 lần.</li>
+      <li>Xơ dừa gần như không có dinh dưỡng, nên mọi lần tưới đều dùng dung dịch đã pha trong bình pha (tưới kết hợp bón phân).</li>
+      <li>Dùng phân thuỷ canh 2 phần A–B, pha theo hướng dẫn trên chai rồi dùng bút đo EC chỉnh đúng EC mục tiêu của giai đoạn. Chọn loại có canxi, magie đầy đủ.</li>
+      <li>Tưới nhiều lần, mỗi lần ít, sao cho 20–30 % lượng nước chảy ra đáy chậu để rửa muối thừa.</li>
+      <li>Mỗi tuần một lần, rửa muối thừa trong xơ dừa: trên trang Điều khiển, bật “Bơm nước vào bình pha” khoảng 30 giây (không bơm dinh dưỡng), rồi bật “Bơm tưới lên cây” cho đến khi bình pha cạn.</li>
+      <li>Không để xơ dừa ngập nước lâu: dâu tây dễ thối rễ.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- NHẬN DIỆN -->
+<section class="view" id="v-nhandien" hidden>
+  <div><h2>Chụp ảnh và nhận diện cây</h2><p class="lead">Chọn mã cây (hoặc đưa tem QR của cây vào khung hình), chụp lá, hoa hoặc quả. Webapp hiện ngày trồng, giai đoạn sắp tới và phân tích bệnh qua hình ảnh.</p></div>
+  <div class="grid2 wide">
+    <div class="panel" style="display:grid;gap:12px;align-content:start">
+      <div class="bar"><span style="font-weight:700">Cây đang chụp:</span><div class="pick" id="pickPlant"></div></div>
+      <div class="cam" id="cam">
+        <video id="video" playsinline muted hidden></video>
+        <img id="shot" alt="Ảnh vừa chụp" hidden>
+        <div class="ph-msg" id="camMsg"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <span>Bấm “Bật camera” để xem hình trực tiếp</span></div>
+        <div class="frame" id="frame" hidden></div>
+        <span class="tag" id="camTag">Cây 1</span>
+        <span class="qr" id="qrState" hidden>Đang tìm tem QR…</span>
+      </div>
+      <div class="bar">
+        <button class="btn" id="btnCam">Bật camera</button>
+        <select id="camSel" style="width:auto;max-width:220px" hidden aria-label="Chọn camera"></select>
+        <div class="spacer"></div>
+        <button class="btn" id="btnPick">Chọn ảnh có sẵn</button>
+        <button class="btn primary big" id="btnShoot" disabled>Chụp & phân tích</button>
+      </div>
+      <input type="file" id="imgIn" accept="image/*" capture="environment" hidden>
+      <canvas id="work" hidden></canvas>
+    </div>
+    <div style="display:grid;gap:18px;align-content:start">
+      <div class="panel" id="plantInfo"></div>
+      <div class="panel" id="resultBox">
+        <h3>Kết quả phân tích</h3>
+        <p class="note" style="margin:0">Chưa có ảnh. Chụp một tấm để bắt đầu.</p>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>Mô hình AI nhận diện bệnh</h3>
+    <p class="note" style="margin-top:0">Webapp dùng mô hình huấn luyện bằng Google Teachable Machine (Image Project). Huấn luyện xong, bấm Export → Upload, rồi dán đường link vào đây. Tên lớp nên đặt theo các nhãn: <code>khoe</code>, <code>phan_trang</code>, <code>moc_xam</code>, <code>dom_la</code>, <code>chay_la</code>, <code>than_thu</code>, <code>dom_goc</code> để webapp hiện đúng thông tin bệnh. Khi chưa có mô hình, webapp chỉ phân tích màu lá sơ bộ.</p>
+    <div class="formrow" style="margin-top:12px;grid-template-columns:minmax(0,1fr) auto">
+      <label class="f">Đường link mô hình Teachable Machine<input type="text" id="modelUrl" placeholder="https://teachablemachine.withgoogle.com/models/xxxxxxx/" spellcheck="false"></label>
+      <button class="btn leaf" id="btnModel">Tải mô hình</button>
+    </div>
+    <p class="note" id="modelState">Chưa tải mô hình.</p>
+  </div>
+</section>
+
+<!-- ĐIỀU KHIỂN -->
+<section class="view" id="v-dieukhien" hidden>
+  <div class="bar">
+    <div><h2>Điều khiển thiết bị</h2><p class="lead">Bật tắt trực tiếp. Trạng thái chỉ đổi sang “Đang bật” khi Yolo UNO báo lại đã làm xong.</p></div>
+    <div class="spacer"></div>
+    <label class="btn" style="gap:8px">Màu khi bật tay<input type="color" id="manualColor" value="#ffffff" style="width:30px;height:22px;padding:0;border:0;background:none;cursor:pointer"></label>
+    <button class="btn" id="btnClock">Đặt giờ cho Yolo UNO</button>
+    <div class="seg" id="segMode">
+      <button data-mode="thucong" aria-pressed="true">Thủ công</button>
+      <button data-mode="tudong" aria-pressed="false">Tự động theo ngưỡng</button>
+    </div>
+  </div>
+  <div class="devs" id="devCards"></div>
+  <div class="panel">
+    <h3>Ngưỡng tự động</h3>
+    <p class="note" style="margin-top:0">Dùng khi chọn chế độ “Tự động theo ngưỡng”. Yolo UNO bật quạt khi nóng hoặc ẩm quá ngưỡng. Khi độ ẩm đất dưới ngưỡng, Yolo UNO chạy thêm một lần “pha và tưới”, mỗi lần cách nhau ít nhất 30 phút để nước kịp ngấm. Đèn luôn chạy theo lịch chiếu sáng, cảm biến ánh sáng chỉ dùng để theo dõi. Lịch trình hẹn giờ vẫn chạy ở cả hai chế độ.</p>
+    <div class="formrow" style="margin-top:12px">
+      <label class="f">Pha và tưới khi độ ẩm đất dưới (%)<input type="number" id="thSoilMin" min="0" max="100"></label>
+      <label class="f">Cảnh báo úng khi độ ẩm đất trên (%)<input type="number" id="thSoilMax" min="0" max="100"></label>
+      <label class="f">Bật quạt khi nhiệt độ trên (°C)<input type="number" id="thTempMax" min="0" max="60" step="0.5"></label>
+      <label class="f">Bật quạt khi độ ẩm không khí trên (%)<input type="number" id="thHumMax" min="0" max="100"></label>
+      <label class="f">Báo thiếu sáng khi ánh sáng dưới (%)<input type="number" id="thLightMin" min="0" max="100"></label>
+    </div>
+    <div class="bar" style="margin-top:14px"><button class="btn primary" id="btnSendTh">Gửi ngưỡng xuống Yolo UNO</button><span class="updated" id="thSent"></span></div>
+  </div>
+</section>
+
+<!-- LỊCH TRÌNH -->
+<section class="view" id="v-lichtrinh" hidden>
+  <div><h2>Lịch trình hẹn giờ</h2><p class="lead">Lịch được lưu trên Yolo UNO, nên mất mạng hay tắt máy tính thì cây vẫn được chăm đúng giờ. Sửa xong nhớ bấm “Gửi lịch xuống Yolo UNO”.</p></div>
+  <div class="panel">
+    <h3>Thêm lịch</h3>
+    <div class="formrow">
+      <label class="f">Thiết bị<select id="schDev"></select></label>
+      <label class="f">Giờ bắt đầu<input type="time" id="schTime" value="06:30"></label>
+      <label class="f">Chạy trong (phút)<input type="number" id="schDur" value="120" min="0.1" step="0.5"></label>
+      <label class="f" id="schColorWrap">Màu đèn<input type="color" id="schColor" value="#ff1e4b" style="height:38px;padding:2px;width:100%"></label>
+    </div>
+    <div style="margin-top:12px;display:grid;gap:6px">
+      <span style="font-size:13px;font-weight:600;color:var(--muted)">Các ngày</span>
+      <div class="days" id="schDays"></div>
+    </div>
+    <div class="bar" style="margin-top:14px"><button class="btn" id="btnAddSch">Thêm vào lịch</button></div>
+  </div>
+  <div class="panel">
+    <div class="bar"><h3 style="margin:0">Lịch hiện tại</h3><div class="spacer"></div><button class="btn primary" id="btnSendSch">Gửi lịch xuống Yolo UNO</button></div>
+    <div class="tablewrap" style="margin-top:10px"><table>
+      <thead><tr><th>Bật</th><th>Thiết bị</th><th>Giờ</th><th>Thời lượng</th><th>Ngày</th><th></th></tr></thead>
+      <tbody id="schBody"></tbody>
+    </table></div>
+    <p class="note">Chương trình khối lệnh trên Yolo UNO chạy các lịch “Hằng ngày”. “Pha và tưới” tự tính số giây bơm theo công thức ở trang Chăm sóc tự động.</p>
+    <p class="note" id="schSent"></p>
+  </div>
+</section>
+
+<!-- KẾT NỐI -->
+<section class="view" id="v-ketnoi" hidden>
+  <div><h2>Kết nối MQTT</h2><p class="lead">Webapp và Yolo UNO cùng kết nối tới một máy chủ MQTT, dùng chung “mã vườn” làm phần đầu của mọi địa chỉ (topic).</p></div>
+  <div class="grid2">
+    <div class="panel">
+      <h3>Cài đặt cho webapp</h3>
+      <div style="display:grid;gap:12px">
+        <label class="f">Máy chủ MQTT (WebSocket)<input type="text" id="cfgUrl" spellcheck="false"></label>
+        <label class="f">Mã vườn (phải giống trong chương trình Yolo UNO)<input type="text" id="cfgPrefix" spellcheck="false"></label>
+        <div class="formrow">
+          <label class="f">Tên đăng nhập (nếu có)<input type="text" id="cfgUser" autocomplete="off"></label>
+          <label class="f">Mật khẩu (nếu có)<input type="password" id="cfgPass" autocomplete="off"></label>
+        </div>
+        <div class="bar"><button class="btn primary" id="btnConnect">Lưu và kết nối lại</button></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Cài đặt cho Yolo UNO</h3>
+      <dl class="kv">
+        <dt>Máy chủ</dt><dd class="mono" id="kvHost">broker.hivemq.com</dd>
+        <dt>Cổng</dt><dd class="mono">1883</dd>
+        <dt>Tên đăng nhập</dt><dd>(để trống)</dd>
+        <dt>Mật khẩu</dt><dd>(để trống)</dd>
+        <dt>Mã vườn</dt><dd class="mono" id="kvPrefix">—</dd>
+        <dt>Client ID</dt><dd class="mono" id="kvClient">—</dd>
+      </dl>
+      <p class="note">Đây là máy chủ công cộng miễn phí, ai biết địa chỉ cũng xem được. Vì vậy mã vườn cần khó đoán, và không gửi thông tin cá nhân qua đây.</p>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="bar"><h3 style="margin:0">Cơ sở dữ liệu Supabase</h3><div class="spacer"></div><span class="pill" id="dbState" style="background:var(--surface-2);color:var(--muted)">Chưa nối</span></div>
+    <p class="note" style="margin-top:6px">Lưu lâu dài số liệu cảm biến (gộp 1 phút/lần), hồ sơ cây, ảnh chụp, đo EC/pH, nhật ký bật tắt và cài đặt. Máy nào mở webapp cũng thấy cùng dữ liệu.</p>
+    <div class="formrow" style="margin-top:12px;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)">
+      <label class="f">Project URL<input type="text" id="dbUrl" spellcheck="false"></label>
+      <label class="f">Khoá anon / publishable<input type="text" id="dbKey" spellcheck="false" autocomplete="off"></label>
+    </div>
+    <div style="display:grid;gap:8px;margin-top:12px;font-size:14px">
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="dbOn"> Lưu dữ liệu lên Supabase</label>
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="dbStation"> Máy này là <b>trạm thu</b>: ghi số liệu cảm biến và các lần pha tưới tự động</label>
+    </div>
+    <p class="note">Chỉ nên bật “trạm thu” trên một máy để mở webapp thường xuyên (ví dụ máy tính ở phòng thực hành). Các máy khác vẫn xem được dữ liệu và ghi các thao tác của chính mình.</p>
+    <div class="bar" style="margin-top:12px"><button class="btn primary" id="btnDb">Lưu và kết nối</button><a class="btn" id="dbOpen" href="https://supabase.com/dashboard" target="_blank" rel="noopener">Mở bảng dữ liệu trên Supabase</a><span class="updated" id="dbInfo"></span></div>
+  </div>
+  <div class="panel">
+    <h3>Sơ đồ nối dây Yolo UNO</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Linh kiện</th><th>Chân Yolo UNO</th><th>Ghi chú</th></tr></thead>
+      <tbody>
+        <tr><td>Cảm biến nhiệt độ, độ ẩm DHT20</td><td class="mono">Cổng I2C</td><td>Cắm cổng I2C bất kỳ</td></tr>
+        <tr><td>Cảm biến ánh sáng</td><td class="mono">A0</td><td>Đọc theo %, 0–100</td></tr>
+        <tr><td>Cảm biến độ ẩm đất</td><td class="mono">A1</td><td>Cắm vào xơ dừa gần gốc cây</td></tr>
+        <tr><td>Module thời gian thực PCF8563</td><td class="mono">Cổng I2C</td><td>Dùng chung bus I2C với DHT20 và relay</td></tr>
+        <tr><td>Module relay 4 kênh I2C</td><td class="mono">Cổng I2C</td><td>Thiết bị dùng nguồn riêng qua tiếp điểm COM và NO</td></tr>
+        <tr><td>Relay 1: quạt</td><td class="mono">relay 1</td><td rowspan="4">Điều khiển qua I2C, không chiếm chân D</td></tr>
+        <tr><td>Relay 2: bơm nước vào bình pha</td><td class="mono">relay 2</td></tr>
+        <tr><td>Relay 3: bơm dinh dưỡng vào bình pha</td><td class="mono">relay 3</td></tr>
+        <tr><td>Relay 4: bơm tưới lên cây</td><td class="mono">relay 4</td></tr>
+        <tr><td>LED Neopixel (DIN): đèn chiếu sáng</td><td class="mono">D8</td><td>Bật là hiện màu theo giai đoạn, tắt là màu đen. Không cần relay</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <div class="panel">
+    <div class="bar"><h3 style="margin:0">Danh sách địa chỉ (topic)</h3><div class="spacer"></div><button class="btn small" id="btnCopyTopics">Chép toàn bộ</button></div>
+    <div class="tablewrap" style="margin-top:10px"><table>
+      <thead><tr><th>Chiều</th><th>Topic</th><th>Nội dung gửi</th><th>Ý nghĩa</th></tr></thead>
+      <tbody id="topicBody"></tbody>
+    </table></div>
+  </div>
+  <div class="panel">
+    <div class="bar"><h3 style="margin:0">Tin nhắn MQTT gần đây</h3><div class="spacer"></div><button class="btn small" id="btnTest">Gửi tin thử</button></div>
+    <div class="log" id="log" style="margin-top:10px" aria-live="polite"></div>
+  </div>
+</section>
+
+</main>
+<div id="printTags"></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+"use strict";
+/* ================= tiện ích ================= */
+const $=s=>document.querySelector(s);
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}};
+const pad=n=>String(n).padStart(2,"0");
+const hhmm=t=>{const d=new Date(t);return pad(d.getHours())+":"+pad(d.getMinutes())};
+const dmy=t=>{const d=new Date(t);return pad(d.getDate())+"/"+pad(d.getMonth()+1)+"/"+d.getFullYear()};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let toastTimer;function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.hidden=true,2800)}
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
+const loaded={};function loadScript(src){return loaded[src]||(loaded[src]=new Promise((ok,no)=>{const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=()=>{delete loaded[src];no(new Error("Không tải được "+src))};document.head.appendChild(s)}))}
+const svg=p=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+
+/* ================= cấu hình & dữ liệu ================= */
+const DEF={url:"wss://broker.hivemq.com:8884/mqtt",prefix:"dautay_a7k29",user:"",pass:""};
+let cfg=Object.assign({},DEF,store.get("vdt_cfg",{}));
+const T=sub=>cfg.prefix+"/"+sub;
+
+const SENSORS=[
+ {k:"nhietdo",name:"Nhiệt độ",unit:"°C",dec:1,ref:"Dâu tây phát triển tốt: 18–28 °C",
+  icon:'<path d="M10 14V5a2 2 0 1 1 4 0v9a4 4 0 1 1-4 0z"/>',
+  rate:v=>v<15?["bad","Quá lạnh"]:v<18?["warn","Hơi lạnh"]:v<=28?["good","Phù hợp"]:v<=32?["warn","Hơi nóng"]:["bad","Quá nóng"]},
+ {k:"doam",name:"Độ ẩm không khí",unit:"%",dec:0,ref:"Phù hợp: 60–80 %. Trên 85 % dễ sinh nấm mốc",
+  icon:'<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/>',
+  rate:v=>v<50?["bad","Quá khô"]:v<60?["warn","Hơi khô"]:v<=80?["good","Phù hợp"]:v<=85?["warn","Hơi ẩm"]:["bad","Dễ sinh nấm"]},
+ {k:"doamdat",name:"Độ ẩm đất",unit:"%",dec:0,ref:"Phù hợp: 50–75 %. Dâu tây không chịu úng",
+  icon:'<path d="M3 17h18M5 21h14M12 14V8m0 0c0-3 2-5 5-5 0 3-2 5-5 5zm0 0C12 5 10 3 7 3c0 3 2 5 5 5z"/>',
+  rate:v=>v<35?["bad","Đất khô"]:v<50?["warn","Cần tưới"]:v<=75?["good","Phù hợp"]:v<=85?["warn","Hơi ướt"]:["bad","Có nguy cơ úng"]},
+ {k:"anhsang",name:"Ánh sáng",unit:"%",dec:0,ref:"Mức sáng đo được, 0–100 %",
+  icon:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  rate:v=>{const h=new Date().getHours();if(h<6||h>=18)return v<20?["","Ban đêm"]:["good","Có sáng"];return v<th.anhsang_min?["warn","Thiếu sáng"]:["good","Đủ sáng"]}}
+];
+const DEVS=[
+ {k:"den",name:"Đèn Neopixel",icon:'<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>'},
+ {k:"quat",name:"Quạt",icon:'<circle cx="12" cy="12" r="2"/><path d="M12 10c0-4 1-7 4-7 2 0 2 3 0 5l-4 2zm2 2c4 0 7 1 7 4 0 2-3 2-5 0l-2-4zm-2 2c0 4-1 7-4 7-2 0-2-3 0-5l4-2zm-2-2c-4 0-7-1-7-4 0-2 3-2 5 0l2 4z"/>'},
+ {k:"nuoc",name:"Bơm nước vào bình pha",icon:'<path d="M12 3s5 6 5 10a5 5 0 0 1-10 0c0-4 5-10 5-10z"/><path d="M9.5 14a2.5 2.5 0 0 0 2.5 2.5"/>'},
+ {k:"dd",name:"Bơm dinh dưỡng vào bình pha",icon:'<path d="M9 3h6M10 3v5l-5 9a3 3 0 0 0 2.6 4.5h8.8A3 3 0 0 0 19 17l-5-9V3"/><path d="M7 15h10"/>'},
+ {k:"tuoi",name:"Bơm tưới lên cây",icon:'<path d="M4 20h16M7 20v-6a5 5 0 0 1 10 0v6"/><path d="M12 9V4m-3 2 3-2 3 2"/>'}
+];
+const SCH_DEVS=[{k:"den",name:"Đèn Neopixel"},{k:"phatuoi",name:"Pha và tưới"}];
+const devName=k=>k==="phatuoi"?"Pha và tưới":(DEVS.find(d=>d.k===k)||{}).name||k;
+
+/* Giai đoạn sinh trưởng dâu tây (tính từ ngày trồng cây con) */
+const STAGES=[
+ {ten:"Bén rễ, hồi xanh",ngan:"Bén rễ",tu:0,den:14,cham:"Giữ đất ẩm đều 60–70 %, che bớt nắng gắt, chưa bón phân đậm.",benh:["thoi_re","dom_la"]},
+ {ten:"Phát triển thân lá",ngan:"Thân lá",tu:15,den:40,cham:"Bón phân hữu cơ hoặc phân giàu đạm pha loãng 7–10 ngày một lần, tỉa lá già, ngắt bớt ngó bò để cây dồn sức ra hoa.",benh:["phan_trang","dom_la","chay_la","dom_goc"]},
+ {ten:"Ra hoa",ngan:"Ra hoa",tu:41,den:60,cham:"Chuyển sang phân giàu lân và kali. Tưới gốc, không tưới lên hoa. Giữ thông thoáng để hoa thụ phấn tốt.",benh:["moc_xam","phan_trang"]},
+ {ten:"Đậu quả, quả xanh",ngan:"Quả xanh",tu:61,den:80,cham:"Tăng kali, giữ độ ẩm đất ổn định. Lót rơm hoặc màng phủ để quả không chạm đất ẩm.",benh:["moc_xam","than_thu","phan_trang"]},
+ {ten:"Quả chín, thu hoạch",ngan:"Quả chín",tu:81,den:100,cham:"Hái khi quả đỏ 80–90 %, hái vào sáng sớm. Ngắt bỏ ngay quả thối để bệnh không lây.",benh:["moc_xam","than_thu"]},
+ {ten:"Thu hoạch rải rác, duy trì",ngan:"Duy trì",tu:101,den:Infinity,cham:"Tỉa lá già, bón bổ sung định kỳ, tiếp tục theo dõi sâu bệnh để kéo dài vụ.",benh:["phan_trang","moc_xam","chay_la"]}
+];
+const DIS={
+ khoe:{ten:"Cây khoẻ",muc:"good",dau:"Lá xanh đều, không có đốm hay lớp bột lạ.",xuly:"Tiếp tục chăm sóc theo lịch."},
+ phan_trang:{ten:"Bệnh phấn trắng",tac:"Nấm Podosphaera aphanis",muc:"bad",dau:"Lớp bột trắng ở mặt dưới lá, mép lá cong lên, quả bị phủ bột trắng.",xuly:"Ngắt bỏ lá bệnh, tăng thông thoáng, không để độ ẩm không khí cao kéo dài. Có thể dùng chế phẩm sinh học hoặc thuốc gốc lưu huỳnh theo đúng hướng dẫn trên nhãn.",quat:true},
+ moc_xam:{ten:"Bệnh mốc xám (thối quả)",tac:"Nấm Botrytis cinerea",muc:"bad",dau:"Quả có vết thối mềm, phủ lớp mốc xám tro; hoa và cuống bị thâm.",xuly:"Ngắt và tiêu huỷ quả bệnh ngay, không tưới lên quả, tăng thông gió, giữ độ ẩm không khí dưới 85 %.",quat:true},
+ dom_la:{ten:"Bệnh đốm lá",tac:"Nấm Mycosphaerella fragariae",muc:"warn",dau:"Đốm tròn nhỏ viền tím, tâm chuyển xám trắng.",xuly:"Tỉa lá bệnh, tưới gốc thay vì tưới lên lá, giữ khoảng cách giữa các cây."},
+ chay_la:{ten:"Bệnh cháy lá",tac:"Nấm Diplocarpon earlianum",muc:"warn",dau:"Nhiều đốm tím sẫm không có tâm trắng, lá khô cháy như bị bỏng.",xuly:"Loại bỏ lá cháy, tránh làm ướt lá, bón phân cân đối."},
+ than_thu:{ten:"Bệnh thán thư",tac:"Nấm Colletotrichum",muc:"bad",dau:"Vết lõm thâm đen trên quả và cuống, có thể có chấm màu cam hồng.",xuly:"Cắt bỏ phần bệnh, hạn chế tưới phun, khử trùng dụng cụ cắt tỉa.",quat:true},
+ dom_goc:{ten:"Bệnh đốm góc (vi khuẩn)",tac:"Vi khuẩn Xanthomonas fragariae",muc:"warn",dau:"Đốm nhỏ hình góc cạnh, trong mờ khi soi ngược sáng, sau chuyển nâu đỏ.",xuly:"Cách ly cây bệnh, không tưới lên lá, vệ sinh dụng cụ."},
+ thoi_re:{ten:"Thối rễ, héo cây",tac:"Nấm trong đất (Phytophthora, Fusarium…)",muc:"bad",dau:"Cây héo dù đất ẩm, rễ thâm nâu.",xuly:"Giảm tưới, kiểm tra thoát nước, không để độ ẩm đất trên 80 % kéo dài."}
+};
+const OBS={ra_hoa:"Đang ra hoa",qua_xanh:"Có quả xanh",qua_chin:"Có quả chín"};
+function labelKey(raw){
+  const s=String(raw).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/đ/g,"d").replace(/[^a-z0-9]+/g,"_");
+  const map=[["khoe","khoe"],["healthy","khoe"],["binh_thuong","khoe"],["phan_trang","phan_trang"],["powdery","phan_trang"],["moc","moc_xam"],["gray","moc_xam"],["grey","moc_xam"],["botrytis","moc_xam"],
+   ["dom_goc","dom_goc"],["angular","dom_goc"],["dom_la","dom_la"],["leaf_spot","dom_la"],["chay","chay_la"],["scorch","chay_la"],["than_thu","than_thu"],["anthrac","than_thu"],["thoi_re","thoi_re"],
+   ["ra_hoa","ra_hoa"],["flower","ra_hoa"],["qua_xanh","qua_xanh"],["unripe","qua_xanh"],["qua_chin","qua_chin"],["ripe","qua_chin"]];
+  for(const [k,v] of map)if(s.includes(k))return v;return null;
+}
+
+let plants=store.get("vdt_plants",null);
+const plantsSample=!plants;
+if(!plants)plants=[1,2,3,4].map((id,i)=>({id,giong:"Dâu tây Mỹ đá",ngay:["2026-09-08","2026-09-08","2026-09-22","2026-10-12"][i],ghichu:""}));
+let plantLog=store.get("vdt_plog",{});
+let curPlant=1;
+
+let latest={}; let lastSeen=0; let deviceOnline=null;
+let hist=store.get("vdt_hist",[]); let simHist=[];
+let devState={den:0,quat:0,nuoc:0,dd:0,tuoi:0,phatuoi:0}; let pending={}; const sentAt={};
+let mode=store.get("vdt_mode","thucong");
+let th=Object.assign({doamdat_min:45,doamdat_max:70,nhietdo_max:30,doam_max:85,anhsang_min:30},store.get("vdt_th",{}));
+let sch=store.get("vdt_sch",null)||[
+ {tb:"phatuoi",gio:"07:00",tg:0,ngay:"1234567",bat:1,mau:1},{tb:"phatuoi",gio:"16:00",tg:0,ngay:"1234567",bat:1,mau:1},
+ {tb:"den",gio:"18:00",tg:240,ngay:"1234567",bat:1,mau:1,color:"#ff1e4b"}];
+(()=>{const seen={};sch=sch.map(x=>x.tb==="bom"||x.tb==="phan"?{...x,tb:"phatuoi",tg:0}:x).filter(x=>{if(x.tb!=="den"&&x.tb!=="phatuoi")return false;const k=x.tb+x.gio;if(seen[k])return false;seen[k]=1;return true})})();
+let simOn=false, simTimer=null;
+
+/* ================= công thức chăm sóc ================= */
+const RECIPE=[
+ {sang:{ql:12,nn:12},mau:{do:55,xanh:25,trang:20},ppfd:"150–200",ec:[0.8,1.0],lan:3,ml:60,am:[60,75],nk:"1 : 1",
+  ly:"Ánh sáng dịu, nhiều xanh dương giúp cây ra rễ, lá dày, không vươn dài. EC thấp vì rễ non dễ bị cháy."},
+ {sang:{ql:14,nn:14},mau:{do:60,xanh:25,trang:15},ppfd:"200–300",ec:[1.2,1.4],lan:4,ml:100,am:[55,70],nk:"1 : 1",
+  ly:"Đỏ : xanh khoảng 2,5 : 1 cho lá to, thân chắc. Cho đủ đạm để cây phát triển bộ lá chuẩn bị ra hoa."},
+ {sang:{ql:16,nn:12},mau:{do:75,xanh:15,trang:10},ppfd:"300–450",ec:[1.4,1.6],lan:5,ml:120,am:[55,70],nk:"1 : 1,5",
+  ly:"Giống bốn mùa: chiếu 16 giờ giúp ra hoa sớm hơn. Giống ngày ngắn: giữ khoảng 12 giờ, ngày dài trên 13–14 giờ làm cây ra ngó thay vì ra hoa. Tăng ánh sáng đỏ (đỏ : xanh khoảng 5 : 1) để thúc ra hoa."},
+ {sang:{ql:16,nn:12},mau:{do:75,xanh:15,trang:10},ppfd:"300–450",ec:[1.6,1.8],lan:6,ml:150,am:[55,70],nk:"1 : 2",
+  ly:"Nhiều ánh sáng đỏ giúp quả lớn, ngọt hơn. Tăng kali (đạm : kali khoảng 1 : 2) để nuôi quả."},
+ {sang:{ql:16,nn:12},mau:{do:65,xanh:20,trang:15},ppfd:"300–450",ec:[1.6,2.0],lan:6,ml:150,am:[50,65],nk:"1 : 2",
+  ly:"Thêm xanh dương và trắng giúp quả lên màu đẹp và ngọt hơn. EC hơi cao tăng độ ngọt nhưng giảm năng suất chút ít. Giữ xơ dừa hơi khô hơn để quả chắc, ít thối."},
+ {sang:{ql:14,nn:12},mau:{do:65,xanh:20,trang:15},ppfd:"250–350",ec:[1.4,1.6],lan:5,ml:120,am:[55,70],nk:"1 : 1,5",
+  ly:"Giữ cây khoẻ cho lứa quả tiếp theo: tỉa lá già, ngắt ngó, theo dõi EC nước thoát."}
+];
+let care=Object.assign({theo:"auto",giong:"ql",noi:"nang",moc:"05:45",lan:"17:45",fNuoc:20,fDd:20,fTuoi:20,ecDd:12,ecNuoc:0.2,tudong:true,last:null},store.get("vdt_care",{}));
+function mixPlan(R){
+  const tong=R.ml*plants.length, ecT=(R.ec[0]+R.ec[1])/2;
+  let k=(ecT-care.ecNuoc)/Math.max(0.1,care.ecDd-care.ecNuoc); k=Math.max(0,Math.min(1,k));
+  const mlDd=tong*k, mlNuoc=tong-mlDd;
+  return {tong,ecT,k,mlDd,mlNuoc,gDd:Math.max(1,Math.round(mlDd/care.fDd)),gNuoc:Math.max(1,Math.round(mlNuoc/care.fNuoc)),gTuoi:Math.max(1,Math.round(tong*1.15/care.fTuoi)),gTron:20};
+}
+let autoPending=false;
+const mins=t=>{const [h,m]=t.split(":").map(Number);return h*60+m};
+const fromMins=m=>{m=((Math.round(m)%1440)+1440)%1440;return pad(Math.floor(m/60))+":"+pad(m%60)};
+const num=(x,d=1)=>(+x).toFixed(d).replace(".",",");
+function controlStage(){
+  if(care.theo!=="auto"){const st=plantStatus(P(+care.theo));return {i:st&&st.i>=0?st.i:0,why:"theo cây số "+care.theo}}
+  const cnt={};plants.forEach(p=>{const st=plantStatus(p);if(st&&st.i>=0)cnt[st.i]=(cnt[st.i]||0)+1});
+  let best=0,bc=0;Object.keys(cnt).forEach(k=>{if(cnt[k]>bc||(cnt[k]===bc&&+k>best)){best=+k;bc=cnt[k]}});
+  return {i:best,why:bc?`giai đoạn của ${bc}/${plants.length} cây`:"chưa có cây nào được trồng"};
+}
+function buildPlan(i){
+  const R=RECIPE[i],H=R.sang[care.giong]||R.sang.ql,items=[];let lampNote="";
+  if(care.noi==="trongnha"){
+    const m=R.mau,c={sang:mauHex({do:Math.max(30,m.do-35),xanh:m.xanh+30,trang:m.trang+5}),ngay:mauHex({do:Math.round(m.do*0.6),xanh:m.xanh,trang:m.trang+70}),chieu:mauHex({do:m.do+10,xanh:Math.max(5,m.xanh-5),trang:m.trang})};
+    const tS=120,tC=180,tN=Math.max(60,H*60-tS-tC);
+    items.push({tb:"den",gio:"06:00",tg:tS,color:c.sang,doan:"Buổi sáng: nhiều xanh dương"},{tb:"den",gio:fromMins(360+tS),tg:tN,color:c.ngay,doan:"Ban ngày: nhiều trắng, đủ phổ"},{tb:"den",gio:fromMins(360+tS+tN),tg:tC,color:c.chieu,doan:"Cuối ngày: nhiều đỏ"});
+    lampNote="Trồng trong nhà: đèn sáng từ 06:00, tổng "+H+" giờ, chia 3 khung màu như ánh nắng trong ngày"}
+  else{const D=(mins(care.lan)-mins(care.moc))/60,extra=H-D;
+    if(extra>0.1){items.push({tb:"den",gio:care.lan,tg:Math.round(extra*60),color:mauHex(R.mau)});lampNote=`Nắng tự nhiên khoảng ${num(D)} giờ, đèn bật thêm ${num(extra)} giờ sau khi mặt trời lặn`}
+    else lampNote=`Nắng tự nhiên khoảng ${num(D)} giờ đã đủ, không cần bật đèn bù`}
+  const mix=mixPlan(R),sec=mix.gDd+mix.gNuoc+mix.gTron+mix.gTuoi;
+  for(let k=0;k<R.lan;k++)items.push({tb:"phatuoi",gio:fromMins(7*60+(R.lan>1?k*540/(R.lan-1):0)),tg:0});
+  items.forEach(x=>{x.ngay=x.ngay||"1234567";x.bat=1;x.auto=1});
+  return {i,R,H,items,lampNote,sec,mix,nguong:{doamdat_min:R.am[0],doamdat_max:R.am[1],nhietdo_max:th.nhietdo_max,doam_max:th.doam_max,anhsang_min:th.anhsang_min}};
+}
+function applyPlan(){
+  const c=controlStage(),plan=buildPlan(c.i);
+  sch=sch.filter(x=>!x.auto&&!x.mau).concat(plan.items);store.set("vdt_sch",sch);renderSch();
+  th=plan.nguong;store.set("vdt_th",th);fillTh();
+  care.last=c.i;store.set("vdt_care",care);
+  return plan;
+}
+function sendPlan(){
+  const c=controlStage(),plan=buildPlan(c.i);
+  if(!simOn&&!(client&&client.connected)){autoPending=true;$("#careSent").textContent="Đã tạo lịch. Sẽ gửi xuống Yolo UNO ngay khi kết nối được máy chủ.";return false}
+  publish("lichtrinh",schPayload(),{qos:1,retain:true});
+  publish("nguong",JSON.stringify(th),{qos:1,retain:true});
+  publish("den/mau",JSON.stringify(plan.R.mau),{qos:1,retain:true});
+  sendSimple(["lich","nguong","mau","tuoi"]);
+  publish("congthuc",JSON.stringify({gd:c.i+1,ten:STAGES[c.i].ten,gio_sang:plan.H,ec_min:plan.R.ec[0],ec_max:plan.R.ec[1],ph_min:5.8,ph_max:6.2}),{qos:1,retain:true});
+  autoPending=false;$("#careSent").textContent="Đã gửi công thức “"+STAGES[c.i].ten+"” xuống Yolo UNO lúc "+hhmm(Date.now())+".";
+  $("#schSent").textContent="Đã gửi "+sch.length+" lịch lúc "+hhmm(Date.now())+".";return true;
+}
+function specBar(m){return `<div class="spec" role="img" aria-label="Đỏ ${m.do}%, xanh dương ${m.xanh}%, trắng ${m.trang}%"><span style="width:${m.do}%"></span><span style="width:${m.xanh}%"></span><span style="width:${m.trang}%"></span></div>`}
+function renderCare(){
+  const c=controlStage(),plan=buildPlan(c.i),R=plan.R;
+  const fmtDur=x=>durText(x.tg);
+  $("#careNow").innerHTML=`<div style="display:grid;gap:14px">
+    <div class="bar"><div><div class="updated">Đang áp dụng (${c.why})</div><div style="font-weight:800;font-size:20px;color:var(--berry)">${STAGES[c.i].ten}</div></div></div>
+    <div class="stats">
+      <div class="stat"><span class="k">Chiếu sáng</span><span class="v">${plan.H}<small> giờ/ngày</small></span><span class="s">Cường độ gợi ý ${R.ppfd} µmol/m²/s</span></div>
+      <div class="stat"><span class="k">Màu đèn</span><span class="v" style="font-size:16px">Đỏ ${R.mau.do}% · Xanh ${R.mau.xanh}% · Trắng ${R.mau.trang}%</span>${specBar(R.mau)}</div>
+      <div class="stat"><span class="k">Dung dịch dinh dưỡng</span><span class="v">EC ${num(R.ec[0])}–${num(R.ec[1])}</span><span class="s">pH 5,8–6,2 · Đạm : Kali ${R.nk}</span></div>
+      <div class="stat"><span class="k">Tưới dinh dưỡng</span><span class="v">${R.lan}<small> lần/ngày</small></span><span class="s">${R.ml} ml/cây/lần · ẩm xơ dừa ${R.am[0]}–${R.am[1]} %</span></div>
+    </div>
+    <p style="margin:0;font-size:14px">${R.ly}</p>
+    <div><div class="updated" style="margin-bottom:6px">Lịch sẽ được tạo</div>
+      <ul class="tips">${plan.items.map(x=>`<li>${x.color?`<span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${x.color};vertical-align:-1px;margin-right:6px"></span>`:""}<b>${devName(x.tb)}</b> lúc ${x.gio}${x.tb==="den"?", chạy "+fmtDur(x)+(x.doan?" · "+x.doan:""):""}</li>`).join("")}</ul>
+      <p class="note">${plan.lampNote}.</p></div>
+    <div><div class="updated" style="margin-bottom:6px">Mỗi lần pha và tưới (${plants.length} cây × ${R.ml} ml = ${plan.mix.tong} ml, EC mục tiêu ${num(plan.mix.ecT)})</div>
+      <ul class="tips">
+        <li>Bơm dinh dưỡng vào bình pha: <b>${plan.mix.gDd} giây</b> (khoảng ${Math.round(plan.mix.mlDd)} ml)</li>
+        <li>Bơm nước vào bình pha: <b>${plan.mix.gNuoc} giây</b> (khoảng ${Math.round(plan.mix.mlNuoc)} ml)</li>
+        <li>Chờ trộn đều: <b>${plan.mix.gTron} giây</b></li>
+        <li>Bơm tưới lên cây: <b>${plan.mix.gTuoi} giây</b> (dư 15 % để hút hết bình)</li>
+      </ul>
+      ${plan.mix.k>=1?'<p class="msg bad">EC bình dinh dưỡng thấp hơn EC cần tưới. Hãy pha bình dinh dưỡng đậm hơn.</p>':''}
+      ${plan.mix.gDd<2?'<p class="msg warn">Bơm dinh dưỡng chạy dưới 2 giây nên khó chính xác. Hãy pha loãng bình dinh dưỡng hơn (EC thấp hơn) để thời gian bơm dài ra.</p>':''}</div>
+    <div class="bar"><button class="btn primary" id="btnApplyCare">Tạo lịch và gửi xuống Yolo UNO</button></div>
+    <p class="note" id="careSent" style="margin:0">${care.last===c.i?"Công thức này đang được dùng.":"Công thức này chưa được áp dụng."}</p>
+  </div>`;
+  $("#recipeBody").innerHTML=RECIPE.map((r,i)=>`<tr class="${i===c.i?"cur":""}"><td><b>${STAGES[i].ten}</b><div class="updated">${STAGES[i].den===Infinity?STAGES[i].tu+"+ ngày":STAGES[i].tu+"–"+STAGES[i].den+" ngày"}</div></td>
+    <td>${r.sang[care.giong]} giờ</td><td style="min-width:150px">${r.mau.do} / ${r.mau.xanh} / ${r.mau.trang}${specBar(r.mau)}</td>
+    <td class="mono">${num(r.ec[0])}–${num(r.ec[1])}</td><td>${r.lan} lần × ${r.ml} ml</td><td>${r.am[0]}–${r.am[1]} %</td><td>${r.nk}</td></tr>`).join("");
+}
+document.addEventListener("click",e=>{if(e.target.id==="btnApplyCare"){applyPlan();renderCare();if(sendPlan())toast("Đã tạo lịch và gửi công thức xuống Yolo UNO");else toast("Đã tạo lịch, chờ kết nối để gửi")}});
+function fillCare(){$("#careTheo").value=care.theo;$("#careGiong").value=care.giong;$("#careNoi").value=care.noi;$("#careMoc").value=care.moc;$("#careLan").value=care.lan;$("#careFlowNuoc").value=care.fNuoc;$("#careFlowDd").value=care.fDd;$("#careFlowTuoi").value=care.fTuoi;$("#careEcDd").value=care.ecDd;$("#careEcNuoc").value=care.ecNuoc;$("#careAuto").checked=care.tudong}
+["careTheo","careGiong","careNoi","careMoc","careLan","careFlowNuoc","careFlowDd","careFlowTuoi","careEcDd","careEcNuoc","careAuto"].forEach(id=>$("#"+id).addEventListener("change",()=>{
+  care.theo=$("#careTheo").value;care.giong=$("#careGiong").value;care.noi=$("#careNoi").value;
+  care.moc=$("#careMoc").value||"05:45";care.lan=$("#careLan").value||"17:45";care.fNuoc=Math.max(0.5,+$("#careFlowNuoc").value||20);care.fDd=Math.max(0.5,+$("#careFlowDd").value||20);care.fTuoi=Math.max(0.5,+$("#careFlowTuoi").value||20);care.ecDd=Math.max(0.5,+$("#careEcDd").value||12);care.ecNuoc=Math.max(0,+$("#careEcNuoc").value||0);care.tudong=$("#careAuto").checked;
+  care.last=null;store.set("vdt_care",care);renderCare();
+}));
+/* nhật ký EC/pH */
+let ecLog=store.get("vdt_eclog",[]);
+function judgeEc(e){
+  const out=[],c=controlStage(),R=RECIPE[c.i];
+  if(!isNaN(e.ecIn)){if(e.ecIn<R.ec[0]-0.1)out.push(["warn",`EC dung dịch ${num(e.ecIn)} thấp hơn mức ${num(R.ec[0])}–${num(R.ec[1])} của giai đoạn “${STAGES[c.i].ten}”. Pha đậm thêm.`]);
+    else if(e.ecIn>R.ec[1]+0.1)out.push(["warn",`EC dung dịch ${num(e.ecIn)} cao hơn mức ${num(R.ec[0])}–${num(R.ec[1])}. Pha loãng thêm nước.`]);
+    else out.push(["good",`EC dung dịch ${num(e.ecIn)} đúng mức của giai đoạn.`])}
+  if(!isNaN(e.ecIn)&&!isNaN(e.ecOut)){const d=e.ecOut-e.ecIn;
+    if(d>0.5)out.push(["bad",`EC nước thoát cao hơn ${num(d)} so với dung dịch tưới: muối đang tích tụ trong xơ dừa. Tưới rửa bằng nước sạch và tăng lượng mỗi lần tưới.`]);
+    else if(d<-0.3)out.push(["warn","EC nước thoát thấp hơn dung dịch tưới: cây hút dinh dưỡng mạnh, có thể tăng EC thêm 0,1–0,2."]);
+    else out.push(["good","EC nước thoát gần bằng dung dịch tưới, giá thể ổn định."])}
+  if(!isNaN(e.ph)){if(e.ph<5.5||e.ph>6.5)out.push(["bad",`pH ${num(e.ph)} nằm ngoài khoảng 5,5–6,5: cây khó hút sắt, canxi. Chỉnh về 5,8–6,2.`]);else out.push(["good",`pH ${num(e.ph)} phù hợp.`])}
+  if(e.pct!=null){if(e.pct<15)out.push(["warn",`Chỉ ${num(e.pct,0)} % nước thoát ra. Tăng lượng mỗi lần tưới để đạt 20–30 %.`]);
+    else if(e.pct>40)out.push(["warn",`${num(e.pct,0)} % nước thoát ra, hơi phí dung dịch. Giảm lượng mỗi lần tưới.`]);else out.push(["good",`Tỉ lệ thoát ${num(e.pct,0)} % là hợp lý.`])}
+  return out;
+}
+function renderEc(){
+  $("#ecBody").innerHTML=ecLog.length?ecLog.slice(-8).reverse().map(e=>`<tr><td>${dmy(e.t).slice(0,5)}</td><td class="mono">${isNaN(e.ecIn)?"—":num(e.ecIn)}</td><td class="mono">${isNaN(e.ecOut)?"—":num(e.ecOut)}</td><td class="mono">${isNaN(e.ph)?"—":num(e.ph)}</td><td class="mono">${e.pct==null?"—":num(e.pct,0)+"%"}</td></tr>`).join("")
+    :`<tr><td colspan="5" style="color:var(--muted)">Chưa có lần đo nào.</td></tr>`;
+}
+$("#btnEc").onclick=()=>{
+  const v=id=>parseFloat($("#"+id).value);const mi=v("mlIn"),mo=v("mlOut");
+  const e={t:Date.now(),ecIn:v("ecIn"),ecOut:v("ecOut"),ph:v("phIn"),pct:mi>0&&!isNaN(mo)?mo/mi*100:null};
+  if(isNaN(e.ecIn)&&isNaN(e.ecOut)&&isNaN(e.ph)){toast("Nhập ít nhất một số đo");return}
+  ecLog.push(e);if(ecLog.length>60)ecLog.shift();store.set("vdt_eclog",ecLog);renderEc();
+  dbInsert("do_ec_ph",{ec_vao:isNaN(e.ecIn)?null:e.ecIn,ec_thoat:isNaN(e.ecOut)?null:e.ecOut,ph:isNaN(e.ph)?null:e.ph,ml_tuoi:isNaN(mi)?null:mi,ml_thoat:isNaN(mo)?null:mo,ti_le_thoat:e.pct==null?null:+e.pct.toFixed(1)});
+  $("#ecResult").innerHTML=judgeEc(e).map(([c,m])=>`<div class="msg ${c}">${m}</div>`).join("");
+};
+
+/* ================= tabs ================= */
+const VIEWS=["tongquan","caytrong","chamsoc","nhandien","dieukhien","lichtrinh","ketnoi"];
+function show(view){
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.view===view)));
+  document.querySelectorAll("section.view").forEach(s=>s.hidden=s.id!=="v-"+view);
+  if(location.hash!=="#"+view)history.replaceState(null,"","#"+view);
+  if(view==="tongquan")drawChart();
+  if(view==="chamsoc")renderCare();
+  if(view!=="nhandien")stopCam();
+  window.scrollTo({top:0});
+}
+document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>show(b.dataset.view));
+document.addEventListener("click",e=>{const g=e.target.closest("[data-go]");if(!g)return;if(g.dataset.plant)selectPlant(+g.dataset.plant);show(g.dataset.go)});
+
+/* ================= cây trồng ================= */
+const today0=()=>{const d=new Date();d.setHours(0,0,0,0);return d.getTime()};
+const dateOf=s=>{const [y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d).getTime()};
+function plantStatus(p){
+  const age=Math.floor((today0()-dateOf(p.ngay))/86400000);
+  if(isNaN(age))return null;
+  const i=age<0?-1:STAGES.findIndex(s=>age>=s.tu&&age<=s.den);
+  const cur=STAGES[i]||null, next=STAGES[i+1]||null;
+  return {age,i,cur,next,nextDate:next?dateOf(p.ngay)+next.tu*86400000:null,daysToNext:next?next.tu-age:null};
+}
+const P=id=>plants.find(p=>p.id===id);
+function savePlants(){store.set("vdt_plants",plants);dbSavePlants();$("#sampleNote").hidden=true;renderPlantsAll();if(care.tudong){const c=controlStage();if(care.last!==c.i){applyPlan();sendPlan();toast("Cây chuyển giai đoạn, đã áp dụng công thức mới")}}renderCare()}
+function stageLine(st){
+  if(!st)return "Chưa có ngày trồng";
+  if(st.age<0)return "Sẽ trồng sau "+(-st.age)+" ngày";
+  return st.age+" ngày · "+st.cur.ngan;
+}
+function timelineHTML(st){
+  const segs=STAGES.map((s,i)=>`<div class="seg-t ${st&&i<st.i?"done":st&&i===st.i?"cur":""}" title="${s.ten}"></div>`).join("");
+  const lbl=STAGES.map(s=>`<div>${s.ngan}<br>${s.den===Infinity?s.tu+"+ ngày":s.tu+"–"+s.den}</div>`).join("");
+  return `<div class="timeline">${segs}</div><div class="tl-labels">${lbl}</div>`;
+}
+function chips(keys){return keys.map(k=>`<span class="chip ${DIS[k].muc==="bad"?"bad":"warn"}">${DIS[k].ten}</span>`).join("")}
+function renderPlantCards(){
+  $("#plantCards").innerHTML=plants.map(p=>{
+    const st=plantStatus(p);const logs=(plantLog[p.id]||[]).slice(-6).reverse();
+    return `<div class="panel plant">
+      <div class="ph"><div class="badge">${p.id}</div><div><div class="ttl">Cây số ${p.id}</div><div class="sub">${esc(p.giong)} · ${stageLine(st)}</div></div>
+        <div class="spacer" style="margin-left:auto"></div><button class="btn small primary" data-go="nhandien" data-plant="${p.id}">Chụp cây ${p.id}</button></div>
+      <div class="formrow">
+        <label class="f">Ngày trồng<input type="date" data-pf="ngay" data-id="${p.id}" value="${p.ngay}"></label>
+        <label class="f">Giống<input type="text" data-pf="giong" data-id="${p.id}" value="${esc(p.giong)}"></label>
+      </div>
+      ${st&&st.cur?`<div class="stage-now"><span class="k">Giai đoạn hiện tại · ngày thứ ${st.age}</span><span class="v">${st.cur.ten}</span><p>${st.cur.cham}</p></div>`:""}
+      ${st&&st.next?`<div class="stage-now" style="background:var(--leaf-soft)"><span class="k">Giai đoạn sắp tới</span><span class="v" style="color:var(--leaf)">${st.next.ten}</span><p>Dự kiến từ ${dmy(st.nextDate)} (còn ${st.daysToNext} ngày)</p></div>`:""}
+      ${timelineHTML(st)}
+      ${st&&st.cur?`<div><div class="updated" style="margin-bottom:6px">Bệnh cần chú ý ở giai đoạn này</div><div class="watch">${chips(st.cur.benh)}</div></div>`:""}
+      <div><div class="updated" style="margin-bottom:6px">Ảnh đã chụp ${logs.length?"":"(chưa có)"}</div>
+        <div class="thumbs">${logs.map(l=>`<figure><img src="${l.thumb}" alt="Ảnh cây ${p.id} ngày ${dmy(l.t)}"><figcaption>${dmy(l.t).slice(0,5)}<br>${esc(l.kq)}</figcaption></figure>`).join("")}</div></div>
+      <label class="f">Ghi chú<input type="text" data-pf="ghichu" data-id="${p.id}" value="${esc(p.ghichu)}" placeholder="Ví dụ: chậu gần quạt, đã tỉa lá ngày…"></label>
+    </div>`}).join("");
+}
+$("#plantCards").addEventListener("change",e=>{const el=e.target.closest("[data-pf]");if(!el)return;const p=P(+el.dataset.id);
+  if(el.dataset.pf==="ngay"&&!el.value){toast("Ngày trồng không được để trống");el.value=p.ngay;return}
+  p[el.dataset.pf]=el.value;savePlants();toast("Đã lưu cây số "+p.id)});
+function renderHeroPlants(){
+  $("#heroPlants").innerHTML=plants.map(p=>`<button class="pchip" data-go="caytrong"><b>${p.id}</b>Cây ${p.id}<span>${stageLine(plantStatus(p))}</span></button>`).join("");
+}
+function renderPick(){
+  $("#pickPlant").innerHTML=plants.map(p=>`<button data-pid="${p.id}" aria-pressed="${p.id===curPlant}">Cây ${p.id}</button>`).join("");
+  $("#camTag").textContent="Cây số "+curPlant;
+}
+$("#pickPlant").onclick=e=>{const b=e.target.closest("button");if(b)selectPlant(+b.dataset.pid)};
+function selectPlant(id){if(!P(id))return;curPlant=id;renderPick();renderPlantInfo()}
+function renderPlantInfo(){
+  const p=P(curPlant),st=plantStatus(p);
+  $("#plantInfo").innerHTML=`<div class="plant" style="gap:12px">
+    <div class="ph"><div class="badge">${p.id}</div><div><div class="ttl">Cây số ${p.id}</div><div class="sub">${esc(p.giong)}</div></div></div>
+    <dl class="kv"><dt>Ngày trồng</dt><dd>${dmy(dateOf(p.ngay))}</dd><dt>Tuổi cây</dt><dd>${st?(st.age<0?"chưa trồng":st.age+" ngày"):"—"}</dd>
+      <dt>Hiện tại</dt><dd><b>${st&&st.cur?st.cur.ten:"—"}</b></dd>
+      <dt>Sắp tới</dt><dd>${st&&st.next?`<b style="color:var(--leaf)">${st.next.ten}</b>, khoảng ${dmy(st.nextDate)} (còn ${st.daysToNext} ngày)`:"—"}</dd></dl>
+    ${timelineHTML(st)}
+    ${st&&st.cur?`<div><div class="updated" style="margin-bottom:6px">Bệnh hay gặp ở giai đoạn này</div><div class="watch">${chips(st.cur.benh)}</div></div>`:""}
+  </div>`;
+}
+function renderPlantsAll(){renderPlantCards();renderHeroPlants();renderPick();renderPlantInfo()}
+
+/* tem QR */
+$("#btnTags").onclick=async()=>{
+  try{await loadScript("https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js")}catch(e){toast("Cần có mạng để tạo tem QR");return}
+  $("#printTags").innerHTML=plants.map(p=>{const q=qrcode(0,"M");q.addData("VUONDAU-CAY-"+p.id);q.make();
+    return `<div class="qtag">${q.createSvgTag({cellSize:6,margin:2,scalable:true})}<b>CÂY SỐ ${p.id}</b><div>${esc(p.giong)} · trồng ${dmy(dateOf(p.ngay))}</div></div>`}).join("");
+  setTimeout(()=>window.print(),150);
+};
+
+/* ================= camera & nhận diện ================= */
+let stream=null, qrTimer=null, tmModel=null, lastShot=null;
+const video=$("#video");
+async function startCam(deviceId){
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){toast("Trình duyệt này không mở được camera, hãy dùng “Chọn ảnh có sẵn”");return}
+  stopCam(true);
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:deviceId?{deviceId:{exact:deviceId}}:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:960}}});
+  }catch(e){toast(e.name==="NotAllowedError"?"Bạn chưa cho phép dùng camera. Bấm biểu tượng camera trên thanh địa chỉ để cho phép.":"Không mở được camera: "+e.message);return}
+  video.srcObject=stream;video.hidden=false;$("#shot").hidden=true;$("#camMsg").hidden=true;$("#frame").hidden=false;
+  try{await video.play()}catch(e){}
+  $("#btnCam").textContent="Tắt camera";$("#btnShoot").disabled=false;
+  try{const devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==="videoinput");
+    const sel=$("#camSel");if(devs.length>1){const curId=stream.getVideoTracks()[0].getSettings().deviceId;
+      sel.innerHTML=devs.map((d,i)=>`<option value="${d.deviceId}" ${d.deviceId===curId?"selected":""}>${esc(d.label||"Camera "+(i+1))}</option>`).join("");sel.hidden=false}}catch(e){}
+  startQr();
+}
+function stopCam(keepUi){
+  clearInterval(qrTimer);qrTimer=null;$("#qrState").hidden=true;
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  if(keepUi)return;
+  video.hidden=true;$("#frame").hidden=true;$("#btnCam").textContent="Bật camera";$("#btnShoot").disabled=true;$("#camSel").hidden=true;
+  if($("#shot").hidden)$("#camMsg").hidden=false;
+}
+$("#btnCam").onclick=()=>stream?stopCam():startCam();
+$("#camSel").onchange=e=>startCam(e.target.value);
+async function startQr(){
+  try{await loadScript("https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js")}catch(e){return}
+  const c=document.createElement("canvas"),x=c.getContext("2d",{willReadFrequently:true});
+  $("#qrState").hidden=false;$("#qrState").textContent="Đang tìm tem QR…";
+  qrTimer=setInterval(()=>{
+    if(!stream||!video.videoWidth)return;
+    const w=480,h=Math.round(video.videoHeight/video.videoWidth*w);c.width=w;c.height=h;x.drawImage(video,0,0,w,h);
+    const r=window.jsQR(x.getImageData(0,0,w,h).data,w,h,{inversionAttempts:"dontInvert"});
+    if(r){const m=/CAY[-_ ]?(\d+)/i.exec(r.data);if(m&&P(+m[1])){const id=+m[1];$("#qrState").textContent="Tem QR: cây "+id;
+      if(id!==curPlant){selectPlant(id);toast("Đã nhận tem QR: cây số "+id)}}}
+  },600);
+}
+$("#btnPick").onclick=()=>$("#imgIn").click();
+$("#imgIn").onchange=e=>{const f=e.target.files[0];if(!f)return;const img=new Image();img.onload=()=>{analyze(img,img.naturalWidth,img.naturalHeight);URL.revokeObjectURL(img.src)};img.src=URL.createObjectURL(f);e.target.value=""};
+$("#btnShoot").onclick=()=>{if(!stream||!video.videoWidth){toast("Camera chưa sẵn sàng");return}analyze(video,video.videoWidth,video.videoHeight)};
+
+async function analyze(src,w,h){
+  const cv=$("#work"),max=900,s=Math.min(1,max/Math.max(w,h));cv.width=Math.round(w*s);cv.height=Math.round(h*s);
+  const cx=cv.getContext("2d",{willReadFrequently:true});cx.drawImage(src,0,0,cv.width,cv.height);
+  const url=cv.toDataURL("image/jpeg",.85);const sh=$("#shot");sh.src=url;sh.hidden=false;$("#camMsg").hidden=true;
+  if(stream){video.hidden=true;setTimeout(()=>{if(stream){video.hidden=false;sh.hidden=true}},2500)}
+  $("#resultBox").innerHTML=`<h3>Kết quả phân tích · Cây số ${curPlant}</h3><p class="note" style="margin:0">Đang phân tích…</p>`;
+  const color=colorStats(cx,cv.width,cv.height);
+  let preds=null;
+  if(tmModel){try{preds=(await tmModel.predict(cv)).sort((a,b)=>b.probability-a.probability)}catch(e){toast("Mô hình lỗi: "+e.message)}}
+  lastShot={plant:curPlant,t:Date.now(),color,preds};
+  renderResult(lastShot);
+  const tc=document.createElement("canvas"),ts=120/Math.min(cv.width,cv.height);tc.width=Math.round(cv.width*ts);tc.height=Math.round(cv.height*ts);
+  tc.getContext("2d").drawImage(cv,0,0,tc.width,tc.height);
+  const entry={t:lastShot.t,thumb:tc.toDataURL("image/jpeg",.7),kq:shortResult(lastShot)};
+  (plantLog[curPlant]=plantLog[curPlant]||[]).push(entry);if(plantLog[curPlant].length>12)plantLog[curPlant].shift();
+  if(!store.set("vdt_plog",plantLog)){plantLog[curPlant].splice(0,4);store.set("vdt_plog",plantLog)}
+  renderPlantCards();
+  dbSavePhoto(cv,entry,lastShot);
+  if(client&&client.connected)publish("cay/"+curPlant+"/nhandien",JSON.stringify({t:Math.round(lastShot.t/1000),kq:entry.kq,p:preds?+preds[0].probability.toFixed(2):null}),{qos:0});
+}
+function colorStats(cx,w,h){
+  const d=cx.getImageData(Math.round(w*.1),Math.round(h*.1),Math.round(w*.8),Math.round(h*.8)).data;
+  const c={xanh:0,vang:0,nau:0,trang:0,do:0,khac:0};let n=0;
+  for(let i=0;i<d.length;i+=16){const r=d[i]/255,g=d[i+1]/255,b=d[i+2]/255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b),v=mx,s=mx?(mx-mn)/mx:0;
+    let hh=0;if(mx!==mn){hh=mx===r?((g-b)/(mx-mn))%6:mx===g?(b-r)/(mx-mn)+2:(r-g)/(mx-mn)+4;hh*=60;if(hh<0)hh+=360}
+    n++;
+    if(s<.16&&v>.72)c.trang++;
+    else if(s>.45&&v>.35&&(hh<14||hh>340))c.do++;
+    else if(s>.22&&v>.18&&hh>=70&&hh<=170)c.xanh++;
+    else if(s>.3&&v>.4&&hh>=40&&hh<70)c.vang++;
+    else if(s>.25&&v>.12&&v<.6&&(hh<40||hh>330))c.nau++;
+    else c.khac++;}
+  const leaf=c.xanh+c.vang+c.nau+c.trang;const pct=k=>n?c[k]/n*100:0;
+  return {xanh:pct("xanh"),vang:pct("vang"),nau:pct("nau"),trang:pct("trang"),do:pct("do"),khac:pct("khac"),
+    benhLa:leaf?(c.vang+c.nau)/leaf*100:0,trangLa:leaf?c.trang/leaf*100:0,coLa:c.xanh/n>.12};
+}
+function topDisease(r){
+  if(!r.preds)return null;const best=r.preds[0];const k=labelKey(best.className);return {k,label:best.className,p:best.probability};
+}
+function shortResult(r){
+  const t=topDisease(r);
+  if(t&&t.k&&DIS[t.k])return DIS[t.k].ten;
+  if(t&&t.k&&OBS[t.k])return OBS[t.k];
+  if(t)return t.label;
+  if(!r.color.coLa)return "Ít thấy lá";
+  return r.color.trangLa>8?"Nghi phấn trắng":r.color.benhLa>20?"Lá vàng/nâu":"Lá xanh tốt";
+}
+function renderResult(r){
+  const p=P(r.plant),st=plantStatus(p),c=r.color,t=topDisease(r);
+  let head="",advice=[],info="";
+  if(t){
+    const d=t.k&&DIS[t.k];
+    const cls=d?d.muc:"warn";
+    head=`<div class="result-head ${cls}"><div class="badge">${p.id}</div><div><div class="big">${d?d.ten:t.k&&OBS[t.k]?OBS[t.k]:esc(t.label)}</div><div class="updated">Độ tin cậy ${(t.p*100).toFixed(0)} % · mô hình AI</div></div></div>`;
+    info=`<div style="display:grid;gap:8px">${r.preds.slice(0,4).map(x=>{const kk=labelKey(x.className);const nm=kk&&DIS[kk]?DIS[kk].ten:kk&&OBS[kk]?OBS[kk]:x.className;
+      return `<div class="pbar"><span>${esc(nm)}</span><span class="num">${(x.probability*100).toFixed(1)}%</span><div class="track"><div class="fill" style="width:${(x.probability*100).toFixed(1)}%"></div></div></div>`}).join("")}</div>`;
+    if(d){advice.push(`<p><b>Dấu hiệu:</b> ${d.dau}${d.tac?" ("+d.tac+")":""}</p>`);advice.push(`<p><b>Cách xử lý:</b> ${d.xuly}</p>`);
+      if(t.p<.6)advice.push(`<p>Độ tin cậy còn thấp, nên chụp thêm vài tấm gần hơn, đủ sáng để kiểm tra lại.</p>`);
+      if(d.quat&&typeof latest.doam==="number"&&latest.doam>80)advice.push(`<p>Độ ẩm không khí đang ${latest.doam.toFixed(0)} %, cao hơn mức an toàn. <button class="btn small primary" data-fan>Bật quạt thông gió</button></p>`);
+      if(st&&st.cur&&!st.cur.benh.includes(t.k)&&t.k!=="khoe")advice.push(`<p>Bệnh này ít gặp ở giai đoạn “${st.cur.ten}”, nên quan sát kỹ thêm trước khi xử lý.</p>`)}
+  }else{
+    const sus=c.trangLa>8?["warn","Nghi phấn trắng"]:c.benhLa>20?["warn","Lá có nhiều vùng vàng, nâu"]:!c.coLa?["","Chưa thấy rõ lá"]:["good","Lá xanh tốt"];
+    head=`<div class="result-head ${sus[0]}"><div class="badge">${p.id}</div><div><div class="big">${sus[1]}</div><div class="updated">Phân tích màu sơ bộ · chưa có mô hình AI</div></div></div>`;
+    if(!c.coLa)advice.push(`<p>Ảnh có ít màu lá. Hãy đưa camera gần lá hơn, đặt lá vào giữa khung nét đứt.</p>`);
+    if(c.trangLa>8)advice.push(`<p>Có ${c.trangLa.toFixed(0)} % vùng trắng xám trên lá, có thể là phấn trắng hoặc ánh phản quang. Lật mặt dưới lá để kiểm tra lớp bột trắng.</p>`);
+    if(c.benhLa>20)advice.push(`<p>${c.benhLa.toFixed(0)} % diện tích lá ngả vàng hoặc nâu. Kiểm tra đốm lá, cháy lá hoặc thiếu dinh dưỡng.</p>`);
+    if(c.do>3)advice.push(`<p>Phát hiện quả đỏ trong ảnh (${c.do.toFixed(0)} % khung hình), có thể đã đến lúc thu hoạch.</p>`);
+    advice.push(`<p>Để chẩn đoán đúng tên bệnh, hãy tải mô hình Teachable Machine ở khung bên dưới.</p>`);
+  }
+  if(st&&st.next)advice.push(`<p><b>Sắp tới:</b> cây chuyển sang “${st.next.ten}” khoảng ${dmy(st.nextDate)}. ${st.cur?st.cur.cham:""}</p>`);
+  const bar=[["xanh","var(--leaf)","Lá xanh"],["vang","var(--seed)","Vàng"],["nau","#8a4b2c","Nâu"],["trang","#cfcfcf","Trắng xám"],["do","var(--berry)","Đỏ (quả)"]];
+  $("#resultBox").innerHTML=`<h3>Kết quả phân tích · ${hhmm(r.t)}</h3><div style="display:grid;gap:14px">${head}${info}
+    <div><div class="updated" style="margin-bottom:6px">Màu sắc trong khung</div><div class="colors">${bar.map(([k,col])=>`<span style="width:${c[k].toFixed(1)}%;background:${col}"></span>`).join("")}</div>
+      <div class="legend">${bar.map(([k,col,n])=>`<span><i style="background:${col}"></i>${n} ${c[k].toFixed(0)}%</span>`).join("")}</div></div>
+    <div class="advice">${advice.join("")}</div></div>`;
+}
+$("#resultBox").addEventListener("click",e=>{if(e.target.closest("[data-fan]")){setDev("quat",1);show("dieukhien")}});
+
+/* mô hình Teachable Machine */
+$("#modelUrl").value=store.get("vdt_model","");
+async function loadModel(url){
+  url=url.trim();if(!url){toast("Hãy dán đường link mô hình");return}
+  if(!url.endsWith("/"))url+="/";
+  $("#modelState").textContent="Đang tải thư viện và mô hình…";
+  try{
+    await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js");
+    await loadScript("https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.5/dist/teachablemachine-image.min.js");
+    tmModel=await window.tmImage.load(url+"model.json",url+"metadata.json");
+    store.set("vdt_model",url);
+    const labels=tmModel.getClassLabels();
+    $("#modelState").innerHTML="Đã tải mô hình với "+labels.length+" nhãn: "+labels.map(l=>{const k=labelKey(l);return `<code>${esc(l)}</code>${k?"":" (chưa khớp thông tin bệnh)"}`}).join(", ");
+    toast("Đã tải mô hình AI");
+  }catch(e){tmModel=null;$("#modelState").textContent="Không tải được mô hình. Kiểm tra lại đường link và kết nối mạng. ("+e.message+")"}
+}
+$("#btnModel").onclick=()=>loadModel($("#modelUrl").value);
+
+/* ================= thẻ cảm biến & biểu đồ ================= */
+function renderSensors(){
+  $("#sensorCards").innerHTML=SENSORS.map(s=>{
+    const v=latest[s.k];const has=typeof v==="number"&&!isNaN(v);
+    const [c,t]=has?s.rate(v):["","Chưa có số liệu"];
+    return `<div class="panel sensor"><div class="lbl">${svg(s.icon)}${s.name}</div>
+      <div class="val">${has?v.toFixed(s.dec):"—"}<small>${s.unit}</small></div>
+      <span class="chip ${c}">${t}</span><div class="ref">${s.ref}</div></div>`}).join("");
+}
+function renderLastSeen(){
+  const el=$("#lastSeen");
+  if(!lastSeen){el.textContent=simOn?"Đang chạy dữ liệu mô phỏng.":"Chưa nhận dữ liệu từ Yolo UNO.";updatePills();return}
+  const s=Math.round((Date.now()-lastSeen)/1000);
+  el.textContent=(simOn?"Mô phỏng · ":"")+"Cập nhật "+(s<5?"vừa xong":s<60?s+" giây trước":Math.round(s/60)+" phút trước")+" lúc "+hhmm(lastSeen);
+  updatePills();
+}
+setInterval(renderLastSeen,5000);
+let pushTimer=null;
+function queueHistory(){
+  clearTimeout(pushTimer);
+  pushTimer=setTimeout(()=>{
+    const p={t:Date.now()};SENSORS.forEach(s=>{if(typeof latest[s.k]==="number")p[s.k]=latest[s.k]});
+    if(simOn){simHist.push(p);if(simHist.length>3000)simHist.shift()}
+    else{hist.push(p);const cut=Date.now()-7*86400000;while(hist.length&&(hist[0].t<cut||hist.length>20000))hist.shift();saveHist()}
+    drawChart();
+  },800);
+}
+let saveTimer=null;function saveHist(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>store.set("vdt_hist",hist),2000)}
+let metric="nhietdo", range=3600000, chart=null;
+$("#segMetric").innerHTML=SENSORS.map(s=>`<button data-m="${s.k}" aria-pressed="${s.k===metric}">${s.name.replace(" không khí","")}</button>`).join("");
+$("#segMetric").onclick=e=>{const b=e.target.closest("button");if(!b)return;metric=b.dataset.m;
+  $("#segMetric").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));drawChart()};
+$("#segRange").onclick=e=>{const b=e.target.closest("button");if(!b)return;range=+b.dataset.range;
+  $("#segRange").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));drawChart()};
+function drawChart(){
+  const src=simOn?simHist:hist;const from=Date.now()-range;
+  let pts=src.filter(p=>p.t>=from&&typeof p[metric]==="number");
+  if(pts.length>400){const step=Math.ceil(pts.length/400);pts=pts.filter((_,i)=>i%step===0)}
+  $("#histCount").textContent=(simOn?"Dữ liệu mô phỏng (không lưu). ":"")+"Đã lưu "+hist.length+" lần đo trên máy này.";
+  $("#chartEmpty").hidden=pts.length>0;
+  if(typeof Chart==="undefined")return;
+  const s=SENSORS.find(x=>x.k===metric);
+  const labels=pts.map(p=>{const d=new Date(p.t);return range>86400000?pad(d.getDate())+"/"+pad(d.getMonth()+1)+" "+hhmm(p.t):hhmm(p.t)});
+  const data=pts.map(p=>p[metric]);
+  const ink=css("--muted"),line=css("--line"),col=css("--berry");
+  if(!chart){
+    chart=new Chart($("#chart"),{type:"line",data:{labels,datasets:[{data,borderColor:col,backgroundColor:col+"26",fill:true,tension:.3,pointRadius:0,borderWidth:2}]},
+      options:{responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:"index",intersect:false},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y.toFixed(s.dec)+" "+s.unit}}},
+        scales:{x:{ticks:{color:ink,maxTicksLimit:8,maxRotation:0},grid:{display:false}},
+                y:{ticks:{color:ink},grid:{color:line},title:{display:true,text:s.name+" ("+s.unit+")",color:ink}}}}});
+  }else{
+    chart.data.labels=labels;chart.data.datasets[0].data=data;
+    chart.options.scales.y.title.text=s.name+" ("+s.unit+")";
+    chart.options.plugins.tooltip.callbacks.label=c=>c.parsed.y.toFixed(s.dec)+" "+s.unit;
+    chart.update();
+  }
+}
+$("#btnCsv").onclick=()=>{
+  if(!hist.length){toast("Chưa có số liệu thật để tải");return}
+  const rows=[["thoi_gian","nhiet_do_C","do_am_kk_%","do_am_dat_%","anh_sang_%"]];
+  hist.forEach(p=>{const d=new Date(p.t);rows.push([d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+" "+hhmm(p.t)+":"+pad(d.getSeconds()),p.nhietdo??"",p.doam??"",p.doamdat??"",p.anhsang??""])});
+  const blob=new Blob(["﻿"+rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="so-lieu-vuon-dau.csv";a.click();
+};
+let clearArmed=false;
+$("#btnClear").onclick=e=>{
+  if(!clearArmed){clearArmed=true;e.target.textContent="Bấm lần nữa để xoá";setTimeout(()=>{clearArmed=false;e.target.textContent="Xoá lịch sử"},3000);return}
+  hist=[];store.set("vdt_hist",hist);clearArmed=false;e.target.textContent="Xoá lịch sử";drawChart();toast("Đã xoá lịch sử số liệu");
+};
+
+/* ================= thiết bị ================= */
+function renderDevs(){
+  $("#devCards").innerHTML=DEVS.map(d=>{
+    const on=!!devState[d.k];const pd=pending[d.k]!==undefined;
+    const st=pd?(pending[d.k]?"Đang gửi lệnh bật…":"Đang gửi lệnh tắt…"):on?"Đang bật":"Đang tắt";
+    return `<div class="panel dev ${on?"on":""}"><div class="head"><div class="ico">${svg(d.icon)}</div>
+      <div><div class="name">${d.name}</div><div class="st ${pd?"pending":""}">${st}</div></div>
+      <button class="switch" role="switch" aria-label="${d.name}" aria-checked="${pd?pending[d.k]===1:on}" data-dev="${d.k}" ${pd?'style="opacity:.55;cursor:wait"':""}></button></div>
+      <div class="topic">→ ${T("dieukhien/"+d.k)}</div></div>`}).join("")+
+   `<div class="panel dev ${devState.phatuoi?"on":""}"><div class="head"><div class="ico">${svg('<path d="M12 3s5 6 5 10a5 5 0 0 1-10 0c0-4 5-10 5-10z"/><path d="M12 10v6m-3-3h6"/>')}</div>
+      <div><div class="name">Pha và tưới ngay</div><div class="st">${devState.phatuoi?"Đang pha và tưới…":"Pha dinh dưỡng rồi tưới 1 lần"}</div></div></div>
+      <button class="btn primary" id="btnPhaTuoi" ${devState.phatuoi?"disabled":""}>Chạy 1 lần</button>
+      <div class="topic">→ ${T("dieukhien/phatuoi")}</div></div>`;
+}
+function setDev(k,want){
+  if(!simOn&&!(client&&client.connected)){toast("Chưa kết nối máy chủ MQTT");return}
+  pending[k]=want;sentAt[k]=Date.now();renderDevs();publish("dieukhien/"+k,String(want),{qos:1});if(!simOn)dbEvent(k,want,"tay");
+  if(simOn)setTimeout(()=>onMessage(T("trangthai/"+k),String(want)),400);
+  let lan=0;
+  const cho=()=>{if(pending[k]!==want)return;lan++;
+    if(lan<=2){publish("dieukhien/"+k,String(want),{qos:1});log("↻ gửi lại","dieukhien/"+k,"lần "+(lan+1));setTimeout(cho,5000)}
+    else{delete pending[k];renderDevs();toast(devName(k)+": Yolo UNO chưa phản hồi sau 3 lần gửi. Kiểm tra WiFi của mạch")}};
+  setTimeout(cho,5000);
+}
+$("#devCards").addEventListener("click",e=>{if(!e.target.closest("#btnPhaTuoi"))return;
+  if(!simOn&&!(client&&client.connected)){toast("Chưa kết nối máy chủ MQTT");return}
+  publish("dieukhien/phatuoi","1",{qos:1});toast("Đã gửi lệnh pha và tưới");if(!simOn)dbEvent("phatuoi",1,"tay");
+  if(simOn){const seq=[["phatuoi",1],["dd",1],["dd",0],["nuoc",1],["nuoc",0],["tuoi",1],["tuoi",0],["phatuoi",0]];seq.forEach(([k,v],i)=>setTimeout(()=>onMessage(T("trangthai/"+k),String(v)),600*(i+1)))}});
+$("#devCards").onclick=e=>{const b=e.target.closest(".switch");if(!b)return;const k=b.dataset.dev;
+  if(pending[k]!==undefined){toast("Đang chờ Yolo UNO làm xong lệnh trước, không cần bấm lại");return}
+  setDev(k,devState[k]?0:1)};
+$("#manualColor").addEventListener("change",e=>{if(publish("den/mau_hex",e.target.value,{qos:1,retain:true}))toast("Đã đổi màu đèn khi bật tay")});
+$("#btnClock").onclick=()=>{const d=new Date();
+  const v=[d.getFullYear()%100,d.getMonth()+1,d.getDate(),d.getDay()||7,d.getHours(),d.getMinutes(),d.getSeconds()].join(",");
+  if(publish("dongho",v,{qos:1}))toast("Đã gửi giờ "+hhmm(d)+" cho module RTC")};
+function renderMode(){$("#segMode").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.mode===mode)))}
+$("#segMode").onclick=e=>{const b=e.target.closest("button");if(!b)return;mode=b.dataset.mode;store.set("vdt_mode",mode);renderMode();
+  publish("chedo",mode,{qos:1,retain:true});toast(mode==="tudong"?"Đã chuyển sang tự động theo ngưỡng":"Đã chuyển sang thủ công")};
+function fillTh(){$("#thSoilMin").value=th.doamdat_min;$("#thSoilMax").value=th.doamdat_max;$("#thTempMax").value=th.nhietdo_max;$("#thHumMax").value=th.doam_max;$("#thLightMin").value=th.anhsang_min}
+$("#btnSendTh").onclick=()=>{
+  th={doamdat_min:+$("#thSoilMin").value,doamdat_max:+$("#thSoilMax").value,nhietdo_max:+$("#thTempMax").value,doam_max:+$("#thHumMax").value,anhsang_min:+$("#thLightMin").value};
+  if(th.doamdat_min>=th.doamdat_max){toast("Ngưỡng cảnh báo úng phải lớn hơn ngưỡng tưới");return}
+  store.set("vdt_th",th);
+  if(publish("nguong",JSON.stringify(th),{qos:1,retain:true})){sendSimple(["nguong"]);$("#thSent").textContent="Đã gửi lúc "+hhmm(Date.now());toast("Đã gửi ngưỡng")}
+};
+
+/* ================= lịch trình ================= */
+const DAYS=[["1","T2"],["2","T3"],["3","T4"],["4","T5"],["5","T6"],["6","T7"],["7","CN"]];
+$("#schDev").innerHTML=SCH_DEVS.map(d=>`<option value="${d.k}">${d.name}</option>`).join("");
+$("#schDev").onchange=()=>{const pt=$("#schDev").value==="phatuoi";$("#schDur").disabled=pt;$("#schColorWrap").hidden=pt};
+$("#schDays").innerHTML=DAYS.map(([v,l])=>`<label><input type="checkbox" value="${v}" checked><span>${l}</span></label>`).join("");
+const dayText=s=>s.length===7?"Hằng ngày":DAYS.filter(([v])=>s.includes(v)).map(d=>d[1]).join(", ");
+const durText=m=>!m?"theo công thức":m<1?Math.round(m*60)+" giây":m>=60&&m%60===0?(m/60)+" giờ":m>=60?Math.floor(m/60)+" giờ "+Math.round(m%60)+" phút":Number.isInteger(m)?m+" phút":Math.floor(m)+" phút "+Math.round(m%1*60)+" giây";
+function renderSch(){
+  const rows=[...sch].map((x,i)=>({...x,i})).sort((a,b)=>a.gio.localeCompare(b.gio));
+  $("#schBody").innerHTML=rows.length?rows.map(x=>`<tr>
+    <td><button class="switch" role="switch" aria-label="Bật lịch" aria-checked="${!!x.bat}" data-i="${x.i}" data-act="toggle" style="margin:0"></button></td>
+    <td>${devName(x.tb)}${x.auto?' <span class="chip">tự động</span>':""}${x.tb==="den"?` <input type="color" value="${x.color||"#ff1e4b"}" data-i="${x.i}" data-act="color" aria-label="Màu đèn" style="width:34px;height:24px;padding:0;border:1px solid var(--line);border-radius:6px;vertical-align:middle;cursor:pointer">`:""}</td><td class="mono">${x.gio}</td><td>${durText(x.tg)}</td><td>${dayText(x.ngay)}</td>
+    <td><button class="btn small" data-i="${x.i}" data-act="del">Xoá</button></td></tr>`).join("")
+    :`<tr><td colspan="6" style="color:var(--muted)">Chưa có lịch nào. Thêm lịch ở khung phía trên.</td></tr>`;
+}
+$("#schBody").addEventListener("change",e=>{const c=e.target.closest('input[data-act="color"]');if(!c)return;sch[+c.dataset.i].color=c.value;store.set("vdt_sch",sch);$("#schSent").textContent="Lịch đã thay đổi, chưa gửi xuống Yolo UNO."});
+$("#schBody").onclick=e=>{const b=e.target.closest("button");if(!b)return;const i=+b.dataset.i;
+  if(b.dataset.act==="del")sch.splice(i,1);else sch[i].bat=sch[i].bat?0:1;
+  store.set("vdt_sch",sch);renderSch();$("#schSent").textContent="Lịch đã thay đổi, chưa gửi xuống Yolo UNO."};
+$("#btnAddSch").onclick=()=>{
+  const ngay=[...$("#schDays").querySelectorAll("input:checked")].map(i=>i.value).join("");
+  const pt=$("#schDev").value==="phatuoi";const tg=pt?0:+$("#schDur").value;const gio=$("#schTime").value;
+  if(!gio||!ngay||!(pt||tg>0)){toast("Hãy chọn giờ, thời lượng và ít nhất một ngày");return}
+  sch.push({tb:$("#schDev").value,gio,tg,ngay,bat:1,...(pt?{}:{color:$("#schColor").value})});store.set("vdt_sch",sch);renderSch();
+  $("#schSent").textContent="Lịch đã thay đổi, chưa gửi xuống Yolo UNO.";toast("Đã thêm lịch");
+};
+function mauHex(m){const r=m.do+m.trang,g=m.trang,b=m.xanh+m.trang,k=255/Math.max(r,g,b,1);return "#"+[r,g,b].map(v=>pad(Math.round(v*k).toString(16))).join("")}
+function sendSimple(what){
+  const daily=tb=>sch.filter(x=>x.bat&&x.tb===tb&&x.ngay.length===7).sort((a,b)=>a.gio.localeCompare(b.gio));
+  if(what.includes("lich")){
+    const d=daily("den");
+    publish("lich/den",d.map(x=>String(mins(x.gio))).join(",")||"-",{qos:1,retain:true});
+    publish("lich/den_giay",d.map(x=>Math.max(1,Math.round(x.tg*60))).join(",")||"-",{qos:1,retain:true});
+    publish("lich/den_mau",d.map(x=>x.color||mauHex(RECIPE[controlStage().i].mau)).join(",")||"-",{qos:1,retain:true});
+    publish("lich/tuoi",daily("phatuoi").map(x=>String(mins(x.gio))).join(",")||"-",{qos:1,retain:true});
+  }
+  if(what.includes("tuoi")){const m=mixPlan(RECIPE[controlStage().i]);
+    publish("tuoi/giay_dd",String(m.gDd),{qos:1,retain:true});publish("tuoi/giay_nuoc",String(m.gNuoc),{qos:1,retain:true});
+    publish("tuoi/giay_tron",String(m.gTron),{qos:1,retain:true});publish("tuoi/giay_tuoi",String(m.gTuoi),{qos:1,retain:true});}
+  if(what.includes("nguong"))Object.keys(th).forEach(k=>publish("nguong/"+k,String(Math.round(th[k])),{qos:1,retain:true}));
+  if(what.includes("mau")){const c=controlStage();publish("den/mau_hex",mauHex(RECIPE[c.i].mau),{qos:1,retain:true})}
+}
+function schPayload(){return JSON.stringify(sch.map(x=>({tb:x.tb,h:+x.gio.slice(0,2),m:+x.gio.slice(3,5),giay:Math.round(x.tg*60),ngay:x.ngay,bat:x.bat?1:0})))}
+$("#btnSendSch").onclick=()=>{if(publish("lichtrinh",schPayload(),{qos:1,retain:true})){sendSimple(["lich","mau","tuoi"]);$("#schSent").textContent="Đã gửi "+sch.length+" lịch lúc "+hhmm(Date.now())+".";toast("Đã gửi lịch")}};
+
+/* ================= MQTT ================= */
+let client=null;
+function setPill(el,cls,txt){el.className="pill "+cls;el.querySelector("span:last-child").textContent=txt}
+function updatePills(){
+  const pb=$("#pillBroker"),pd=$("#pillDevice");
+  if(simOn)setPill(pb,"sim","Mô phỏng");
+  else if(client&&client.connected)setPill(pb,"ok","Máy chủ: đã kết nối");
+  else if(client&&client.reconnecting)setPill(pb,"warn","Đang kết nối…");
+  else setPill(pb,"bad","Máy chủ: mất kết nối");
+  const fresh=lastSeen&&Date.now()-lastSeen<60000;
+  if(simOn)setPill(pd,"sim","Yolo UNO: giả lập");
+  else if(deviceOnline===false&&!fresh)setPill(pd,"bad","Yolo UNO: ngoại tuyến");
+  else if(fresh||deviceOnline)setPill(pd,"ok","Yolo UNO: trực tuyến");
+  else setPill(pd,"","Yolo UNO: chưa thấy");
+}
+function log(dir,topic,msg){
+  const el=$("#log");const line=document.createElement("div");
+  line.innerHTML=`<span class="t">${hhmm(Date.now())}:${pad(new Date().getSeconds())} ${dir}</span> `;
+  line.appendChild(document.createTextNode(topic+"  "+msg));
+  el.prepend(line);while(el.childNodes.length>80)el.lastChild.remove();
+}
+function publish(sub,msg,opt){
+  const topic=T(sub);
+  if(simOn&&!(client&&client.connected)){log("⇢ (mô phỏng)",topic,msg);return true}
+  if(!(client&&client.connected)){toast("Chưa kết nối máy chủ MQTT");return false}
+  client.publish(topic,msg,opt||{});log("⇢ gửi",topic,msg);return true;
+}
+function connect(){
+  if(client){try{client.end(true)}catch(e){}client=null}
+  $("#gardenId").textContent="Mã vườn: "+cfg.prefix;
+  if(typeof mqtt==="undefined"){setPill($("#pillBroker"),"bad","Không tải được thư viện MQTT");return}
+  setPill($("#pillBroker"),"warn","Đang kết nối…");
+  const opts={clientId:"web_"+Math.random().toString(16).slice(2,10),reconnectPeriod:4000,connectTimeout:10000,clean:true};
+  if(cfg.user){opts.username=cfg.user;opts.password=cfg.pass}
+  client=mqtt.connect(cfg.url,opts);
+  client.on("connect",()=>{client.subscribe(cfg.prefix+"/#",{qos:1});updatePills();log("✓","kết nối",cfg.url);if(autoPending&&sendPlan())toast("Đã gửi công thức chăm sóc mới xuống Yolo UNO")});
+  client.on("reconnect",()=>setPill($("#pillBroker"),"warn","Đang kết nối lại…"));
+  client.on("close",updatePills);client.on("offline",updatePills);
+  client.on("error",e=>log("✗","lỗi",e.message||String(e)));
+  client.on("message",(t,b)=>{
+    if(simOn&&!/\/(dieukhien\/\w+|chedo|nguong|lichtrinh|test|cay\/\d+\/nhandien)$/.test(t)){setSim(false);toast("Đã nhận dữ liệu thật từ Yolo UNO, dừng mô phỏng")}
+    onMessage(t,b.toString());
+  });
+}
+function onMessage(topic,msg){
+  if(!topic.startsWith(cfg.prefix+"/"))return;
+  const sub=topic.slice(cfg.prefix.length+1);
+  if(!/^(dieukhien\/|chedo$|nguong$|lichtrinh$)/.test(sub))log("⇠ nhận",topic,msg);
+  if(sub==="cambien"){
+    let o;try{o=JSON.parse(msg)}catch(e){return}
+    SENSORS.forEach(s=>{const v=parseFloat(o[s.k]);if(!isNaN(v))latest[s.k]=v});gotData();
+  }else if(SENSORS.some(s=>s.k===sub)){
+    const v=parseFloat(msg);if(!isNaN(v)){latest[sub]=v;gotData()}
+  }else if(sub==="trangthai/tatca"){
+    const v=msg.split(",").map(x=>x.trim()==="1"?1:0);
+    ["quat","nuoc","dd","tuoi","den","phatuoi"].forEach((k,i)=>{if(v.length<=i)return;
+      if(pending[k]!==undefined){if(pending[k]===v[i]){delete pending[k]}else return}
+      devState[k]=v[i]});
+    renderDevs();
+  }else if(sub.startsWith("trangthai/")){
+    const k=sub.slice(10);if(k==="phatuoi"&&!simOn){const nv=msg.trim()==="1"?1:0;if(nv!==devState.phatuoi&&db.station)dbEvent("phatuoi",nv,"he_thong")}
+    if(k in devState){const m=msg.trim().toLowerCase();if(pending[k]!==undefined&&sentAt[k])log("⏱","phản hồi "+k,((Date.now()-sentAt[k])/1000).toFixed(1)+" giây");devState[k]=(m==="1"||m==="on")?1:0;delete pending[k];renderDevs()}
+  }else if(sub==="online"){deviceOnline=msg.trim()==="1";updatePills()}
+}
+function gotData(){lastSeen=Date.now();renderSensors();renderLastSeen();queueHistory();if(!simOn)dbSensor()}
+
+/* ================= mô phỏng ================= */
+const sim={nhietdo:24,doam:72,doamdat:55,anhsang:60};
+function simStep(){
+  const h=new Date().getHours()+new Date().getMinutes()/60;
+  sim.nhietdo+=(23+5*Math.sin((h-9)/24*2*Math.PI)-(devState.quat?2:0)-sim.nhietdo)*0.15+(Math.random()-.5)*0.4;
+  sim.doam+=(74-(devState.quat?8:0)-sim.doam)*0.1+(Math.random()-.5)*1.2;
+  sim.doamdat+=(devState.tuoi?3.5:-0.6)+(Math.random()-.5)*0.4;sim.doamdat=Math.max(20,Math.min(92,sim.doamdat));
+  sim.anhsang=Math.max(0,Math.min(100,(devState.den?55:0)+60*Math.max(0,Math.sin((h-6)/12*Math.PI))+(Math.random()-.5)*4));
+  onMessage(T("cambien"),JSON.stringify({nhietdo:+sim.nhietdo.toFixed(1),doam:Math.round(sim.doam),doamdat:Math.round(sim.doamdat),anhsang:Math.round(sim.anhsang)}));
+}
+function setSim(on){
+  simOn=on;clearInterval(simTimer);
+  $("#btnSim").textContent=on?"Dừng mô phỏng":"Chạy dữ liệu mô phỏng";
+  if(on){
+    simHist=[];const now=Date.now();
+    for(let i=120;i>0;i--){const t=now-i*30000;const h=new Date(t).getHours()+new Date(t).getMinutes()/60;
+      simHist.push({t,nhietdo:+(23+5*Math.sin((h-9)/24*2*Math.PI)+(Math.random()-.5)*.6).toFixed(1),doam:Math.round(74+(Math.random()-.5)*4),
+        doamdat:Math.round(Math.max(30,62-(120-i)*0.08+(Math.random()-.5))),anhsang:Math.round(Math.max(0,60*Math.sin((h-6)/12*Math.PI))+(Math.random()-.5)*3)})}
+    Object.assign(sim,simHist[simHist.length-1]);delete sim.t;
+    simTimer=setInterval(simStep,3000);simStep();toast("Đang chạy dữ liệu mô phỏng, không lưu vào lịch sử")}
+  else{latest={};lastSeen=0;renderSensors();toast("Đã dừng mô phỏng")}
+  renderLastSeen();drawChart();
+}
+$("#btnSim").onclick=()=>setSim(!simOn);
+
+/* ================= trang kết nối ================= */
+function fillCfg(){
+  $("#cfgUrl").value=cfg.url;$("#cfgPrefix").value=cfg.prefix;$("#cfgUser").value=cfg.user;$("#cfgPass").value=cfg.pass;
+  let host="";try{host=new URL(cfg.url).hostname}catch(e){}
+  $("#kvHost").textContent=host||"—";$("#kvPrefix").textContent=cfg.prefix;$("#kvClient").textContent="yolouno_"+cfg.prefix;
+  renderTopics();
+}
+const TOPICS=()=>[
+ ["up","cambien",'{"nhietdo":27.5,"doam":72,"doamdat":55,"anhsang":64}',"Gửi cả 4 số đo trong một lần (khuyên dùng)"],
+ ["up","nhietdo","27.5","Hoặc gửi riêng nhiệt độ (°C)"],
+ ["up","doam","72","Hoặc gửi riêng độ ẩm không khí (%)"],
+ ["up","doamdat","55","Hoặc gửi riêng độ ẩm đất (%)"],
+ ["up","anhsang","64","Hoặc gửi riêng ánh sáng (%)"],
+ ...DEVS.map(d=>["up","trangthai/"+d.k,"1 / 0","Báo lại trạng thái thật của "+d.name.toLowerCase()]),
+ ["up","trangthai/tatca","0,1,0,0,1,0","Gửi mỗi 10 giây: trạng thái thật của quạt, bơm nước, bơm dinh dưỡng, bơm tưới, đèn, pha tưới (1 = bật)"],
+ ["up","online","1 / 0","Báo đang hoạt động (gửi 1 khi kết nối, đặt 0 làm Last Will)"],
+ ...DEVS.map(d=>["down","dieukhien/"+d.k,"1 / 0","Lệnh bật (1) / tắt (0) "+d.name.toLowerCase()]),
+ ["down","dieukhien/phatuoi","1","Chạy ngay một lần pha và tưới"],
+ ["up","trangthai/phatuoi","1 / 0","Đang (1) / đã xong (0) pha và tưới"],
+ ["down","lich/den","1065,300","Giờ bật đèn hằng ngày tính bằng phút từ 0 giờ (17:45 → 1065), cách nhau dấu phẩy (\"-\" nếu không có)"],
+ ["down","lich/den_giay","14400,3600","Số giây đèn sáng tương ứng với từng giờ ở trên"],
+ ["down","lich/den_mau","#7f66ff,#ffb4a0,#ff2a40","Màu Neopixel tương ứng với từng khung giờ đèn"],
+ ["down","lich/tuoi","420,645,870","Giờ pha và tưới hằng ngày, tính bằng phút từ 0 giờ (7:00 → 420)"],
+ ["down","tuoi/giay_dd","3","Số giây bơm dinh dưỡng vào bình pha. Có thêm tuoi/giay_nuoc, tuoi/giay_tron, tuoi/giay_tuoi"],
+ ["down","dongho","26,10,28,3,20,30,0","Đặt giờ cho module RTC: năm, tháng, ngày, thứ (1 = T2 … 7 = CN), giờ, phút, giây"],
+ ["down","nguong/nhietdo_max","30","Bật quạt khi nhiệt độ vượt mức này (chế độ tự động). Có thêm nguong/doam_max, nguong/doamdat_min…"],
+ ["down","den/mau_hex","#ffffff","Màu đèn khi bật bằng nút trên webapp"],
+ ["down","chedo","thucong / tudong","Chế độ hoạt động (giữ lại – retained)"],
+ ["down","nguong",'{"doamdat_min":45,"doamdat_max":70,"nhietdo_max":30,"doam_max":85,"anhsang_min":30}',"Ngưỡng dạng JSON, dành cho bản MicroPython (retained)"],
+ ["down","lichtrinh",'[{"tb":"phatuoi","h":7,"m":0,"giay":0,"ngay":"1234567","bat":1}]',"Lịch dạng JSON, dành cho bản MicroPython (retained). ngay: 1=T2 … 7=CN"],
+ ["down","den/mau",'{"do":75,"xanh":15,"trang":10}',"Tỉ lệ màu đèn LED theo giai đoạn, % (retained)"],
+ ["down","congthuc",'{"gd":3,"ten":"Ra hoa","gio_sang":16,"ec_min":1.4,"ec_max":1.6,"ph_min":5.8,"ph_max":6.2}',"Công thức chăm sóc đang áp dụng (retained)"],
+ ["down","cay/1/nhandien",'{"t":1793000000,"kq":"Bệnh phấn trắng","p":0.91}',"Kết quả nhận diện ảnh của cây 1–4 (tuỳ chọn, để hiển thị trên mạch)"]
+];
+function renderTopics(){
+  $("#topicBody").innerHTML=TOPICS().map(([d,t,p,m])=>`<tr><td><span class="dir ${d}">${d==="up"?"Yolo UNO → Web":"Web → Yolo UNO"}</span></td>
+    <td class="mono">${esc(cfg.prefix)}/${t}</td><td><code>${esc(p)}</code></td><td>${m}</td></tr>`).join("");
+}
+$("#btnCopyTopics").onclick=()=>{
+  let host="";try{host=new URL(cfg.url).hostname}catch(e){}
+  const txt="Máy chủ: "+host+"  Cổng: 1883\nMã vườn: "+cfg.prefix+"\n\n"+TOPICS().map(([d,t,p,m])=>(d==="up"?"[Yolo UNO -> Web] ":"[Web -> Yolo UNO] ")+cfg.prefix+"/"+t+"   "+p+"   "+m).join("\n");
+  if(navigator.clipboard)navigator.clipboard.writeText(txt).then(()=>toast("Đã chép danh sách topic"),()=>toast("Không chép được, hãy bôi đen bảng để chép"));
+  else toast("Không chép được, hãy bôi đen bảng để chép");
+};
+$("#btnConnect").onclick=()=>{
+  const p=$("#cfgPrefix").value.trim().replace(/[#+\s]/g,"");
+  if(!p){toast("Mã vườn không được để trống");return}
+  cfg={url:$("#cfgUrl").value.trim()||DEF.url,prefix:p,user:$("#cfgUser").value.trim(),pass:$("#cfgPass").value};
+  store.set("vdt_cfg",cfg);fillCfg();renderDevs();connect();toast("Đã lưu, đang kết nối lại");
+};
+$("#btnTest").onclick=()=>publish("test","Xin chào từ webapp "+hhmm(Date.now()),{});
+
+/* ================= Supabase ================= */
+const DBDEF={url:"https://pwuajsnerrswslkjsidd.supabase.co",key:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3dWFqc25lcnJzd3Nsa2pzaWRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxOTY5MDcsImV4cCI6MjEwODc3MjkwN30.8E3OsZoTMtXnGDHyHsP7QUGJsHMeUqs6B21WbNcTv24",on:true,station:true};
+let db=Object.assign({},DBDEF,store.get("vdt_db",{})), sb=null, dbOk=false, dbSaved=0, dbErr="";
+const normUrl=u=>String(u||"").trim().replace(/\/rest\/v1\/?$/,"").replace(/\/+$/,"");
+function dbStatus(cls,txt){const el=$("#dbState");el.textContent=txt;el.style.color=cls==="ok"?"var(--good)":cls==="bad"?"var(--bad)":"var(--muted)";el.style.background=cls==="ok"?"var(--leaf-soft)":cls==="bad"?"var(--berry-soft)":"var(--surface-2)";
+  setPill($("#pillDb"),cls==="ok"?"ok":cls==="bad"?"bad":"",cls==="ok"?"CSDL: đã nối":cls==="bad"?"CSDL: lỗi":"CSDL: tắt");
+  $("#dbInfo").textContent=(dbSaved?"Đã lưu "+dbSaved+" bản ghi trong lần mở này. ":"")+(dbErr?"Lỗi gần nhất: "+dbErr:"")}
+function dbFill(){$("#dbUrl").value=db.url;$("#dbKey").value=db.key;$("#dbOn").checked=db.on;$("#dbStation").checked=db.station;
+  const ref=(normUrl(db.url).match(/https:\/\/([a-z0-9]+)\.supabase\.co/)||[])[1];$("#dbOpen").href=ref?"https://supabase.com/dashboard/project/"+ref+"/editor":"https://supabase.com/dashboard"}
+function dbFail(e){dbErr=(e&&(e.message||e.error_description||e.hint))||String(e);console.warn("Supabase",e);dbStatus("bad","Lỗi: "+dbErr.slice(0,60))}
+async function dbInsert(table,row){if(!dbOk)return false;const {error}=await sb.from(table).insert(row);if(error){dbFail(error);return false}dbSaved++;dbStatus("ok","Đã nối");return true}
+function dbEvent(k,v,nguon){dbInsert("su_kien",{thiet_bi:k,trang_thai:v?1:0,nguon})}
+/* cảm biến: gộp trung bình mỗi phút */
+let dbBuf={},dbMin=0;
+function dbSensor(){if(!dbOk||!db.station)return;const m=Math.floor(Date.now()/60000);
+  if(dbMin&&m!==dbMin)dbFlush(dbMin);dbMin=m;
+  SENSORS.forEach(s=>{const v=latest[s.k];if(typeof v==="number"&&!isNaN(v))(dbBuf[s.k]=dbBuf[s.k]||[]).push(v)})}
+async function dbFlush(minute){const b=dbBuf;dbBuf={};const avg=a=>a&&a.length?+(a.reduce((x,y)=>x+y,0)/a.length).toFixed(1):null;
+  const row={thoi_gian:new Date(minute*60000).toISOString(),nhiet_do:avg(b.nhietdo),do_am:avg(b.doam),do_am_dat:avg(b.doamdat),anh_sang:avg(b.anhsang)};
+  if(row.nhiet_do==null&&row.do_am==null&&row.do_am_dat==null&&row.anh_sang==null)return;
+  let {error}=await sb.from("cam_bien").upsert(row,{onConflict:"thoi_gian",ignoreDuplicates:true});
+  if(error&&/unique|exclusion|ON CONFLICT|42P10/i.test(error.message+error.code))({error}=await sb.from("cam_bien").insert(row));
+  if(error)dbFail(error);else{dbSaved++;dbStatus("ok","Đã nối")}}
+setInterval(()=>{if(dbMin&&Math.floor(Date.now()/60000)!==dbMin&&Object.keys(dbBuf).length){dbFlush(dbMin);dbMin=0}},15000);
+/* hồ sơ cây */
+async function dbSavePlants(){if(!dbOk)return;const now=new Date().toISOString();
+  for(const p of plants){const {error}=await sb.from("cay_trong").update({giong:p.giong,ngay_trong:p.ngay,ghi_chu:p.ghi_chu||"",cap_nhat:now}).eq("id",p.id);if(error){dbFail(error);return}}
+  store.set("vdt_plants_t",Date.now());dbSaved++;dbStatus("ok","Đã nối")}
+/* ảnh chụp */
+async function dbSavePhoto(cv,entry,shot){if(!dbOk)return;
+  try{const blob=await new Promise(r=>cv.toBlob(r,"image/jpeg",.8));const path="cay"+shot.plant+"/"+new Date(shot.t).toISOString().replace(/[:.]/g,"-")+".jpg";
+    const up=await sb.storage.from("anh-cay").upload(path,blob,{contentType:"image/jpeg"});if(up.error)throw up.error;
+    const url=sb.storage.from("anh-cay").getPublicUrl(path).data.publicUrl;
+    const t=shot.preds&&shot.preds[0];const st=plantStatus(P(shot.plant));
+    await dbInsert("nhat_ky_anh",{thoi_gian:new Date(shot.t).toISOString(),cay_id:shot.plant,giai_doan:st&&st.cur?st.cur.ten:null,ket_qua:entry.kq,nhan_ai:t?t.className:null,do_tin_cay:t?+t.probability.toFixed(3):null,ti_le_mau:shot.color,anh_url:url});
+    entry.url=url;toast("Đã lưu ảnh lên cơ sở dữ liệu")}catch(e){dbFail(e)}}
+/* cài đặt dùng chung */
+let sharedTimer=null,applyingShared=false;
+const _set=store.set;store.set=(k,v)=>{const r=_set(k,v);if(!applyingShared&&["vdt_sch","vdt_th","vdt_care","vdt_mode"].includes(k)){store_t();clearTimeout(sharedTimer);sharedTimer=setTimeout(dbPushShared,1500)}return r};
+function store_t(){_set("vdt_shared_t",Date.now())}
+async function dbPushShared(){if(!dbOk)return;const {error}=await sb.from("cai_dat").upsert({khoa:"webapp",gia_tri:{sch,th,care,mode,t:store.get("vdt_shared_t",Date.now())},cap_nhat:new Date().toISOString()},{onConflict:"khoa"});if(error)dbFail(error);else{dbSaved++;dbStatus("ok","Đã nối")}}
+/* tải dữ liệu khi mở */
+async function dbLoad(){
+  // cây
+  const c=await sb.from("cay_trong").select("*").order("id");if(c.error)throw c.error;
+  if(c.data&&c.data.length){
+    if(!store.get("vdt_plants_t",0)&&!plantsSample){await dbSavePlants()}
+    else{plants=c.data.filter(r=>r.id<=4).map(r=>({id:r.id,giong:r.giong,ngay:r.ngay_trong,ghi_chu:r.ghi_chu||""}));_set("vdt_plants",plants);$("#sampleNote").hidden=true;renderPlantsAll()}}
+  // cài đặt
+  const sd=await sb.from("cai_dat").select("*").eq("khoa","webapp").maybeSingle();
+  if(sd.data&&sd.data.gia_tri&&(sd.data.gia_tri.t||0)>store.get("vdt_shared_t",0)){const g=sd.data.gia_tri;applyingShared=true;
+    if(g.sch)sch=g.sch;if(g.th)th=g.th;if(g.care)care=Object.assign(care,g.care);if(g.mode)mode=g.mode;
+    _set("vdt_sch",sch);_set("vdt_th",th);_set("vdt_care",care);_set("vdt_mode",mode);_set("vdt_shared_t",g.t);applyingShared=false;
+    renderSch();fillTh();fillCare();renderMode();renderCare()}
+  else if(!sd.data)dbPushShared();
+  // lịch sử cảm biến: 24 giờ chi tiết + 7 ngày theo giờ
+  const since=new Date(Date.now()-86400000).toISOString();let rows=[];
+  for(let off=0;off<3000;off+=1000){const r=await sb.from("cam_bien").select("thoi_gian,nhiet_do,do_am,do_am_dat,anh_sang").gte("thoi_gian",since).order("thoi_gian").range(off,off+999);if(r.error)throw r.error;rows=rows.concat(r.data);if(r.data.length<1000)break}
+  const hr=await sb.from("cam_bien_theo_gio").select("*").gte("gio",new Date(Date.now()-7*86400000).toISOString()).lt("gio",since).order("gio");
+  const toP=(t,a,b,c2,d)=>{const o={t};if(a!=null)o.nhietdo=+a;if(b!=null)o.doam=+b;if(c2!=null)o.doamdat=+c2;if(d!=null)o.anhsang=+d;return o};
+  const remote=[...(hr.data||[]).map(r=>toP(Date.parse(r.gio)+1800000,r.nhiet_do_tb,r.do_am_tb,r.do_am_dat_tb,r.anh_sang_tb)),...rows.map(r=>toP(Date.parse(r.thoi_gian)+30000,r.nhiet_do,r.do_am,r.do_am_dat,r.anh_sang))];
+  if(remote.length){const firstLocal=hist.length?hist[0].t:Infinity;const older=remote.filter(x=>x.t<firstLocal-60000);hist=older.concat(hist);drawChart()}
+  // ảnh
+  const im=await sb.from("nhat_ky_anh").select("thoi_gian,cay_id,ket_qua,anh_url").order("thoi_gian",{ascending:false}).limit(48);
+  if(im.data){for(const r of im.data.reverse()){const t=Date.parse(r.thoi_gian),arr=(plantLog[r.cay_id]=plantLog[r.cay_id]||[]);
+    if(!arr.some(e=>Math.abs(e.t-t)<2000))arr.push({t,thumb:r.anh_url,kq:r.ket_qua||"",url:r.anh_url})}
+    for(const k in plantLog){plantLog[k].sort((a,b)=>a.t-b.t);if(plantLog[k].length>12)plantLog[k]=plantLog[k].slice(-12)}renderPlantCards()}
+  // EC
+  const ec=await sb.from("do_ec_ph").select("*").order("thoi_gian",{ascending:false}).limit(30);
+  if(ec.data){for(const r of ec.data.reverse()){const t=Date.parse(r.thoi_gian);if(!ecLog.some(e=>Math.abs(e.t-t)<5000))ecLog.push({t,ecIn:r.ec_vao??NaN,ecOut:r.ec_thoat??NaN,ph:r.ph??NaN,pct:r.ti_le_thoat})}ecLog.sort((a,b)=>a.t-b.t);renderEc()}
+}
+async function dbConnect(){
+  sb=null;dbOk=false;dbErr="";
+  if(!db.on){dbStatus("","Đã tắt");return}
+  if(typeof supabase==="undefined"){dbFail("Không tải được thư viện Supabase");return}
+  try{sb=supabase.createClient(normUrl(db.url),db.key.trim(),{auth:{persistSession:false}});
+    dbStatus("","Đang nối…");dbOk=true;await dbLoad();dbStatus("ok","Đã nối")}catch(e){dbOk=false;dbFail(e)}
+}
+$("#btnDb").onclick=()=>{db={url:normUrl($("#dbUrl").value)||DBDEF.url,key:$("#dbKey").value.trim()||DBDEF.key,on:$("#dbOn").checked,station:$("#dbStation").checked};
+  let pl="";try{pl=atob((db.key.split(".")[1]||"").replace(/-/g,"+").replace(/_/g,"/"))}catch(e){}
+  if(/service_role/.test(pl)||/^sb_secret_/.test(db.key)){toast("Đây là khoá service_role, không được dùng trong webapp. Hãy dùng khoá anon");return}
+  _set("vdt_db",db);dbFill();dbConnect();toast("Đã lưu cài đặt cơ sở dữ liệu")};
+
+/* ================= khởi động ================= */
+$("#sampleNote").hidden=!plantsSample;
+renderSensors();renderDevs();renderMode();fillTh();renderSch();fillCfg();renderPlantsAll();renderLastSeen();
+fillCare();renderEc();
+if(care.tudong&&care.last!==controlStage().i){applyPlan();autoPending=true}
+renderCare();
+const startView=(location.hash||"#tongquan").slice(1);
+show(VIEWS.includes(startView)?startView:"tongquan");
+connect();
+dbFill();dbConnect();
+if(store.get("vdt_model",""))loadModel(store.get("vdt_model",""));
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{if(chart){chart.destroy();chart=null;drawChart()}});
+})();
+</script>
+</body>
+</html>
